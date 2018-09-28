@@ -3,7 +3,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
+################################## copied and pasted... change up code ##############################################
 int main() {
 	const char* server_name = "localhost";
 	const int server_port = 8877;
