@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-// ################################## copied and pasted... change up code ##############################################
+
 /**
  * TCP Uses 2 types of sockets, the connection socket and the listen socket.
  * The Goal is to separate the connection phase from the data exchange phase.
