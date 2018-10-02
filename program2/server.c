@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
 	// bind it to listen to the incoming connections on the created server
 	// address, will return -1 on error
 	if ((bind(listen_sock, (struct sockaddr *)&server_address, sizeof(server_address))) < 0) {
-		printf("could not bind socket\n");
+		fprintf(stderr, "could not bind socket: %s\n", strerror(errno));
 		return 1;
 	}
 
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
 		printf("Connection established\n");
 
 		// keep running as long as the client keeps the connection open
-		while ((n = recv(sock, pbuffer, maxlen, 0)) > 0) {
+		while (1) {
 			// Don't know what the following three lines of code are for,
 			// but they mess it up I think.  Gonna leave them commented for now.
 			//pbuffer += n;
@@ -113,12 +113,23 @@ int main(int argc, char *argv[]) {
 				printf("server echo error\n");
 				return 1;
 			}*/
+			
+			// REceive the command
+			memset(pbuffer, '\0', maxlen);
+			if ((n = recv(sock, pbuffer, maxlen, 0)) < 0) {
+				fprintf(stderr, "recv failed in the server: %s\n", strerror(errno));
+				return 1;
+			}
+			else if (n == 0) {
+				break; // client ended connection
+			}
+			
+			// All cases, call functions
 			if (strncmp(pbuffer, "DL", 2) == 0) {
 				if (DL(pbuffer, sock) != 0) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got DL\n");
 			}
 			else if (strncmp(pbuffer, "UP", 2) == 0) {
 				if (UP(pbuffer, sock) != 0) {
@@ -163,7 +174,7 @@ int main(int argc, char *argv[]) {
 				printf("Got CD\n");
 			}
 			else {
-				fprintf(stderr, "error in receiving command\n");
+				continue;
 			}
 			
 			memset(pbuffer, '\0', maxlen);
@@ -183,14 +194,26 @@ int DL(char *cmd, int sock) {
 		fprintf(stderr, "server recv error\n");
 		return 1;
 	}
-	len = ntohs(len);
+	len = ntohs(len) + 1;
 	
 	char file[len];
 	if (recv(sock, file, len, 0) < 0) {
 		fprintf(stderr, "server recv error\n");
 		return 1;
 	}
+	file[len - 1] = '\0';
 	
+	// Check if file exists
+	FILE *fp = fopen(file, "r");
+	if (!fp) {
+		if (send(sock, (char *)&neg1, sizeof(int), 0) < 0) {
+			fprintf(stderr, "server send error: %s\n", strerror(errno));
+			return 1;
+		}
+	}
+	else {
+		continue;
+	}
 	
 	return 0;
 }

@@ -178,14 +178,16 @@ while (fgets(output, sizeof(output), in) > 0) {
 
 int DL(char *cmd, int sock) {
 	// Send command to the server
-	if (send(sock, "DL", strlen("DL"), 0) < 0) {
+	char *dl = strtok(cmd, " ");
+	printf("dl: |%s|\n", dl);
+	if (send(sock, dl, strlen(dl), 0) < 0) {
 		printf("client send error\n");
 		return 1;
 	}
 	
 	// break apart command
-	char *dl = strtok(cmd, " ");
-	char *file = strtok(cmd, " ");
+	char *file = strtok(NULL, "\n");
+	printf("dl: |%s|\nfile name: |%s|\n", dl, file);
 	short int len = htons(strlen(file));
 	
 	// Send length of file name then file name
@@ -193,10 +195,12 @@ int DL(char *cmd, int sock) {
 		fprintf(stderr, "client send error 1\n");
 		return 1;
 	}
+	printf("sent length of string: |%d|\n", (int)ntohs(len));
 	if (send(sock, file, len, 0) < 0) {
 		fprintf(stderr, "client send error\n");
 		return 1;
 	}
+	printf("sent string: |%s|\n", file);
 	
 	
 	return 0;
