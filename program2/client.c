@@ -226,6 +226,10 @@ int LS(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
+	char * buff;
+	recv(sock, buff, BUFSIZ, 0);
+	printf("%s\n", buff);
+	
 	return 0;
 }
 
@@ -320,9 +324,34 @@ int RMDIR(char *cmd, int sock) {
 
 
 int CD(char *cmd, int sock) {
+	char *token = strtok(cmd, " ");
+    char * dirName = strtok(NULL, " ");
+    char dirNameLen[BUFSIZ];
+    short len = strlen(dirName);
+    len = htons(len);
+	sprintf(dirNameLen, "%d %s", len, dirName); // Read vars in buffer dirNamelen
 	if (send(sock, "CD", strlen("CD"), 0) < 0) {
 		printf("client send error\n");
 		return 1;
+	}
+	printf("%s\n", dirName); ////////////////
+	if(send(sock, dirNameLen, strlen(dirNameLen), 0) < 0){
+		fprintf(stderr, "client send error: %d", strerror(errno));
+	}
+	printf("sent that mutha fucka\n");
+	char returnNum[BUFSIZ];
+	if(recv(sock, returnNum, BUFSIZ, 0) < 0){
+		fprintf(stderr, "client recv failed: %d", strerror(errno));
+	}
+	int n = atoi(returnNum);
+	if(n == 1){
+		printf("Changed current directory\n");
+	}
+	else if(n == -1){
+		printf("Error in changing directory\n");
+	}
+	else{
+		printf("The directory does not exist on server\n");
 	}
 	return 0;
 }

@@ -208,6 +208,47 @@ int RM(char *cmd, int sock) {
 
 
 int LS(char *cmd, int sock) {
+	DIR *d;
+    struct dirent *dir;
+    d = opendir(".");
+    if (d)
+    {
+    	char buff1[BUFSIZ];
+    	char buff2[BUFSIZ];
+    	int size = 0;
+    	struct stat fileStat;
+
+        while ((dir = readdir(d)) != NULL)
+        {
+        	if (strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")!=0) {
+	            
+			    if(stat(dir->d_name,&fileStat) < 0)    
+			        return 1;
+
+			    size+=fileStat.st_size;
+				strcat(buff1, (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IRUSR) ? "r" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IWUSR) ? "w" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IXUSR) ? "x" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IRGRP) ? "r" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IWGRP) ? "w" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IXGRP) ? "x" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IROTH) ? "r" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IWOTH) ? "w" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IXOTH) ? "x " : "- ");
+
+	            strcat(buff1, dir->d_name);
+	            strcat(buff1, "\n");
+	            
+	        }
+        }
+
+        sprintf(buff2,"%d",size);
+        strcat(buff2,"\n");
+        strcat(buff2,buff1);
+        send(sock, buff2, sizeof(buff2), 0);
+        closedir(d);
+    }
 	return 0;
 }
 
@@ -338,6 +379,38 @@ int RMDIR(char *cmd, int sock) {
 
 
 int CD(char *cmd, int sock) {
+	
+	printf("in server CD func\n"); //////////////////
+
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+	printf("%s\n", dirName); ///////////////////
+	if (chdir(dirName) == 0) {
+		returnNum = "1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	} else if (errno==ENOENT) {
+		returnNum="-2";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	} else {
+		returnNum="-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	}
 	return 0;
 }
 
