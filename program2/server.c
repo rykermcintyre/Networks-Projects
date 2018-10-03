@@ -99,7 +99,8 @@ int main(int argc, char *argv[]) {
 		printf("Connection established\n");
 
 		// keep running as long as the client keeps the connection open
-		while (1) {
+		memset(pbuffer, '\0', maxlen);
+		while (n = recv(sock, pbuffer, maxlen, 0) > 0) {
 			// Don't know what the following three lines of code are for,
 			// but they mess it up I think.  Gonna leave them commented for now.
 			//pbuffer += n;
@@ -117,14 +118,6 @@ int main(int argc, char *argv[]) {
 			}*/
 			
 			// REceive the command
-			memset(pbuffer, '\0', maxlen);
-			if ((n = recv(sock, pbuffer, maxlen, 0)) < 0) {
-				fprintf(stderr, "recv failed in the server: %s\n", strerror(errno));
-				return 1;
-			}
-			else if (n == 0) {
-				break; // client ended connection
-			}
 			
 			// All cases, call functions
 			if (strncmp(pbuffer, "DL", 2) == 0) {
@@ -189,32 +182,72 @@ int main(int argc, char *argv[]) {
 
 int DL(char *cmd, int sock) {
 	
-	// // Receive len of filename and filename
-	// short int len;
-	// if (recv(sock, (char *)&len, sizeof(short int), 0) < 0) {
-	// 	fprintf(stderr, "server recv error\n");
-	// 	return 1;
-	// }
-	// len = ntohs(len) + 1;
+	// Recv file name
+	char filename_buf[4096];
+	char *filename = filename_buf;
+	memset(filename, '\0', 4096);
+	if (recv(sock, filename, 4096, 0) < 0) {
+		fprintf(stderr, "Server could not recv file name: %s\n", strerror(errno));
+		return 1;
+	}
 	
-	// char file[len];
-	// if (recv(sock, file, len, 0) < 0) {
-	// 	fprintf(stderr, "server recv error\n");
-	// 	return 1;
-	// }
-	// file[len - 1] = '\0';
-	
-	// // Check if file exists
-	// FILE *fp = fopen(file, "r");
-	// if (!fp) {
-	// 	if (send(sock, (char *)&neg1, sizeof(int), 0) < 0) {
-	// 		fprintf(stderr, "server send error: %s\n", strerror(errno));
-	// 		return 1;
-	// 	}
-	// }
-	// else {
-	// 	continue;
-	// }
+	// Try to open file
+	FILE *fp = fopen(filename, "r");
+	if (fp == NULL) {
+		char *neg1 = "-1";
+		if (send(sock, neg1, sizeof(neg1), 0) < 0) {
+			fprintf(stderr, "Could not send -1 to client\n");
+			return 1;
+		}
+	}
+	else {
+		// Send size of file
+		fseek(fp, 0L, SEEK_END);
+		int sz = ftell(fp);
+		rewind(fp);
+		char szbuf[100];
+		sprintf(szbuf, "%d", sz);
+		if (send(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+			fprintf(stderr, "server send error sending size of file: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		// Send md5 hash of file
+		char md5_buf[4096];
+		char *md5_cmd = md5_buf;
+		strcpy(md5_cmd, "md5sum ");
+		strcat(md5_cmd, filename);
+		FILE *in = popen(md5_cmd, "r");
+		char new_md5_buf[33];
+		char *md5 = new_md5_buf;
+		fgets(md5, sizeof(new_md5_buf), in);
+		fclose(in);
+		md5[32] = '\0';
+		if (send(sock, md5, 33, 0) < 0) {
+			fprintf(stderr, "server send error: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		// Start reading from file and sending
+		char get_buf[256];
+		void *get = get_buf;
+		memset(get, '\0', 256);
+		int n;
+		while ((n = fread(get, 1, 256, fp)) == 256) {
+			if (send(sock, get, 256, 0) < 0) {
+				fprintf(stderr, "Couldn't send part of file to client: %s\n", strerror(errno));
+				return 1;
+			}
+			
+			memset(get, '\0', 256);
+		}
+		if (send(sock, get, n, 0) < 0) {
+			fprintf(stderr, "Couldn't send part of file to client\n");
+			return 1;
+		}
+		
+	}
+
 	
 	return 0;
 }
