@@ -188,21 +188,54 @@ int main(int argc, char *argv[]) {
 
 int DL(char *cmd, int sock) {
 	
+	// Receive length of filename then the file's name
+	char length_buf[100];
+	char *length_str = length_buf;
+	memset(length_str, '\0', 100);
+	if (recv(sock, length_str, 100, 0) < 0) {
+		fprintf(stderr, "server can't receive length of filename\n");
+		return 1;
+	}
+	short int len = (short int)atoi(length_str);
+	
+	char file_name_buffer[len + 1];
+	char *file = file_name_buffer;
+	memset(file, '\0', len + 1);
+	printf("Only here, got |%d|%s| as my length.\n", len, length_str);
+	recv(sock, file, 9, 0);
+	/*if (recv(sock, file, 9, 0) < 0) {
+		fprintf(stderr, "server can't receive file's name\n");
+		return 1;
+	}*/
+	file[len] = '\0';
+	
+	printf("Made it here\n");
+	
+	
+	/*
 	// Receive len of filename and filename
-	char *lens;
-	if (recv(sock, lens, 4096, 0) < 0) {
-		fprintf(stderr, "server recv error\n");
+	char lensbuf[100];
+	char *lens = lensbuf;
+	if (recv(sock, lens, 100, 0) < 0) {
+		fprintf(stderr, "server recv error 1\n");
 		return 1;
 	}
 	short int len = (short int)atoi(lens);
-	printf("length is %d\n", (int)len);
-	char filebuf[len];
+	char filebuf[len + 1];
 	char *file = filebuf;
+	printf("1\n");
 	if (recv(sock, file, len, 0) < 0) {
 		fprintf(stderr, "server recv error\n");
 		return 1;
 	}
-	file[len - 1] = '\0';
+	file[len] = '\0';
+	*/
+	
+	
+	
+	
+	
+	
 	
 	// Check if file exists
 	printf("file: |%s|...\n", file);

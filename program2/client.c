@@ -178,7 +178,6 @@ while (fgets(output, sizeof(output), in) > 0) {
 int DL(char *cmd, int sock) {
 	// Send command to the server
 	char *dl = strtok(cmd, " ");
-	printf("dl: |%s|\n", dl);
 	if (send(sock, dl, strlen(dl), 0) < 0) {
 		printf("client send error\n");
 		return 1;
@@ -189,16 +188,17 @@ int DL(char *cmd, int sock) {
 	printf("dl: |%s|\nfile name: |%s|\n", dl, file);
 	char lensbuf[4096];
 	int file_name_len = strlen(file);
-	sprintf(lensbuf, "%d", file_name_len);
+	sprintf(lensbuf, "%d\0", file_name_len);
 	char *lens = lensbuf;
 	
 	// Send length of file name then file name
-	if (send(sock, lens, sizeof(lens), 0) < 0) {
+	if (send(sock, lens, sizeof(lens) + 1, 0) < 0) {
 		fprintf(stderr, "client send error 1\n");
 		return 1;
 	}
 	short int len = (short int)atoi(lens);
-	printf("sent length of string: |%s|\n", len);
+	printf("sent length of string: |%s|%d|\n", lens, len);
+	printf("Trying to send string: |%s|\n", file);
 	if (send(sock, file, len, 0) < 0) {
 		fprintf(stderr, "client send error\n");
 		return 1;
@@ -207,11 +207,12 @@ int DL(char *cmd, int sock) {
 	
 	// Receive size
 	int sz;
-	if (recv(sock, (char *)&sz, sizeof(int), 0) < 0) {
+	char szbuf[100];
+	if (recv(sock, szbuf, 100, 0) < 0) {
 		fprintf(stderr, "client recv error\n");
 		return 1; // file doesn't exist on server
 	}
-	sz = ntohl(sz);
+	sz = sprintf(szbuf, "%d\0", strlen(szbuf));
 	if (sz < 0) {
 		fprintf(stderr, "file doesn't exist\n");
 		return 1;
