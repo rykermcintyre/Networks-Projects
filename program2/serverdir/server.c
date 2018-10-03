@@ -38,9 +38,12 @@ int CD(char *, int);
 
 
 int main(int argc, char *argv[]) {
-	// port to start the server on
-	// ************* CHANGE TO ACCEPT CMD LINE ARG LATER **************
-	int SERVER_PORT = 41023;
+	if (argc!=2) {
+		printf("Enter valid arguments: ./myftpd [Port]\n");
+		exit(EXIT_FAILURE);
+	}
+
+	int SERVER_PORT = atoi(argv[1]);
 
 	// socket address used for the server
 	struct sockaddr_in server_address;
@@ -165,7 +168,6 @@ int main(int argc, char *argv[]) {
 			else {
 				continue;
 			}
-			
 			memset(pbuffer, '\0', maxlen);
 		}
 		close(sock);
@@ -200,7 +202,6 @@ int DL(char *cmd, int sock) {
 		fseek(fp, 0L, SEEK_END);
 		int sz = ftell(fp);
 		rewind(fp);
-		
 		if (sz == 0) {
 			char *neg1 = "-1";
 			if (send(sock, neg1, sizeof(neg1), 0) < 0) {
@@ -208,7 +209,6 @@ int DL(char *cmd, int sock) {
 				return 1;
 			}
 		}
-		
 		char szbuf[100];
 		sprintf(szbuf, "%d", sz);
 		if (send(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
@@ -372,78 +372,74 @@ int UP(char *cmd, int sock) {
 		fprintf(stderr, "return string send error\n");
 		return 1;
 	}
-	
-	// =============================================================
-	/*
-	// Try to open file
-	FILE *fp = fopen(filename, "r");
-	if (fp == NULL) {
-		char *neg1 = "-1";
-		if (send(sock, neg1, sizeof(neg1), 0) < 0) {
-			fprintf(stderr, "Could not send -1 to client\n");
-			return 1;
-		}
-	}
-	else {
-		// Send size of file
-		fseek(fp, 0L, SEEK_END);
-		int sz = ftell(fp);
-		rewind(fp);
-		char szbuf[100];
-		sprintf(szbuf, "%d", sz);
-		if (send(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
-			fprintf(stderr, "server send error sending size of file: %s\n", strerror(errno));
-			return 1;
-		}
-		
-		// Send md5 hash of file
-		char md5_buf[4096];
-		char *md5_cmd = md5_buf;
-		strcpy(md5_cmd, "md5sum ");
-		strcat(md5_cmd, filename);
-		FILE *in = popen(md5_cmd, "r");
-		char new_md5_buf[33];
-		char *md5 = new_md5_buf;
-		fgets(md5, sizeof(new_md5_buf), in);
-		fclose(in);
-		md5[32] = '\0';
-		if (send(sock, md5, 33, 0) < 0) {
-			fprintf(stderr, "server send error: %s\n", strerror(errno));
-			return 1;
-		}
-		
-		// Start reading from file and sending
-		char get_buf[256];
-		void *get = get_buf;
-		memset(get, '\0', 256);
-		int n;
-		while ((n = fread(get, 1, 256, fp)) == 256) {
-			if (send(sock, get, 256, 0) < 0) {
-				fprintf(stderr, "Couldn't send part of file to client: %s\n", strerror(errno));
-				return 1;
-			}
-			
-			memset(get, '\0', 256);
-		}
-		if (send(sock, get, n, 0) < 0) {
-			fprintf(stderr, "Couldn't send part of file to client\n");
-			return 1;
-		}
-		
-	}*/
 	return 0;
 }
 
 
 int RM(char *cmd, int sock) {
+	char fileNameLen[BUFSIZ];
+	if(recv(sock, fileNameLen, sizeof(fileNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(fileNameLen, " ");
+	char *fileName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	fileName[len - 1] = '\0';
+	char *returnNum;	
+
+	FILE *f = fopen(fileName, "r");
+	if (f){
+		returnNum = "1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+		char userAnswer[BUFSIZ];
+		if(recv(sock, userAnswer, BUFSIZ, 0) < 0){
+			fprintf(stderr, "Recv failed: %d\n", strerror(errno));
+			return 1;
+		}
+		if(strcmp(userAnswer, "Yes\n") == 0){
+			if(remove(fileName) < 0){
+				returnNum = "-1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 1;
+				}
+				return 0;
+			}
+			else{
+				returnNum = "1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 0;
+				}
+			}
+		}
+		else{
+			printf("Delete abandoned by the user!\n");
+		}
+		return 0;
+	}
+	else{
+		fprintf(stderr, "fopen failed: %d\n", strerror(errno));
+		returnNum = "-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}	
+	}
 	return 0;
 }
 
 
 int LS(char *cmd, int sock) {
 	DIR *d;
-    struct dirent *dir;
-    d = opendir(".");
+  struct dirent *dir;
+	char *curDir;
+	char *anything;
+	anything = getcwd(curDir,BUFSIZ);
+	d = opendir(anything);
     if (d)
     {
     	char buff1[BUFSIZ];
@@ -460,8 +456,7 @@ int LS(char *cmd, int sock) {
 
 			    size+=fileStat.st_size;
 
-			    // getting permmisions
-			    strcat(buff1, (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
+				  strcat(buff1, (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
 			    strcat(buff1, (fileStat.st_mode & S_IRUSR) ? "r" : "-");
 			    strcat(buff1, (fileStat.st_mode & S_IWUSR) ? "w" : "-");
 			    strcat(buff1, (fileStat.st_mode & S_IXUSR) ? "x" : "-");
@@ -482,50 +477,165 @@ int LS(char *cmd, int sock) {
         strcat(buff2,"\n");
         strcat(buff2,buff1);
         send(sock, buff2, sizeof(buff2), 0);
-        closedir(d);
+        closedir(d); 
+		memset(buff1, 0, sizeof(buff1));
+		memset(buff2, 0, sizeof(buff2));
     }
-
 	return 0;
 }
 
 
 int MKDIR(char *cmd, int sock) {
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	printf("len: %d", len);
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+	printf("%s\n", dirName);
+	DIR *dir = opendir(dirName);
+	if (dir){
+		closedir(dir);
+		returnNum = "-2";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+		return 0;
+	}
+	else if (ENOENT == errno){
+	    /* Directory does not exist. */
+			mkdir(dirName, 0700);
+			returnNum = "1";
+			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				return 1;
+			}	
+	}
+	else{
+		fprintf(stderr, "opendir failed: %d\n", strerror(errno));
+		returnNum = "-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}	
+	}
 	return 0;
 }
 
 
 int RMDIR(char *cmd, int sock) {
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+
+	DIR *dir = opendir(dirName);
+	struct dirent *d;
+	int count = 0; //every "empty" directory contains only 2 things
+	if (dir){
+		while((d = readdir(dir)) != NULL){
+			if(++count > 2){
+				break;
+			}
+		}
+		if(count > 2){
+			returnNum = "-2";
+			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				return 1;
+			}
+			return 0;
+		}
+		returnNum = "1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+		char userAnswer[BUFSIZ];
+		if(recv(sock, userAnswer, BUFSIZ, 0) < 0){
+			fprintf(stderr, "Recv failed: %d\n", strerror(errno));
+			return 1;
+		}
+		if(strcmp(userAnswer, "Yes\n") == 0){
+			if(rmdir(dirName) < 0){
+				returnNum = "-1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 1;
+				}
+				return 0;
+			}
+			else{
+				returnNum = "1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 0;
+				}
+			}
+		}
+		else{
+			printf("Delete abandoned by the user!\n");
+		}
+		return 0;
+	}
+	else if (ENOENT == errno){
+	    /* Directory does not exist. */
+			returnNum = "-1";
+			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				return 1;
+			}	
+	}
+	else{
+		fprintf(stderr, "opendir failed: %d\n", strerror(errno));
+		returnNum = "-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}	
+	}
 	return 0;
 }
 
 
 int CD(char *cmd, int sock) {
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+	if (chdir(dirName) == 0) {
+		returnNum = "1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	} else if (errno==ENOENT) {
+		returnNum="-2";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	} else {
+		returnNum="-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	}
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
