@@ -32,6 +32,7 @@ int MKDIR(char *, int);
 int RMDIR(char *, int);
 int CD(char *, int);
 
+
 int main(int argc, char *argv[]) {
 	
 	if (argc!=3) {
@@ -40,7 +41,7 @@ int main(int argc, char *argv[]) {
 	}
 	char* server_name = argv[1];
 	const int server_port = atoi(argv[2]);
-
+  
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
 	server_address.sin_family = AF_INET;
@@ -90,45 +91,38 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got UP\n");
 		}
 		else if (strncmp(cmd, "RMDIR", 5) == 0) {
 			if (RMDIR(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got RMDIR\n");
 		}
 		else if (strncmp(cmd, "LS", 2) == 0) {
 			if (LS(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got LS\n");
 		}
 		else if (strncmp(cmd, "MKDIR", 5) == 0) {
 			if (MKDIR(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got MKDIR\n");
 		}
 		else if (strncmp(cmd, "RM", 2) == 0) {
 			if (RM(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got RM\n");
 		}
 		else if (strncmp(cmd, "CD", 2) == 0) {
 			if (CD(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got CD\n");
 		}
 		else if (strncmp(cmd, "EXIT", 4) == 0) {
-			printf("Got EXIT\n");
 			if (send(sock, "", 0, 0) < 0) {
 				printf("client send error\n");
 				return 1;
@@ -139,13 +133,10 @@ int main(int argc, char *argv[]) {
 			printf("Please use a valid command\n");
 		}
 	}
-
 	// close the socket
 	close(sock);
 	return 0;
 }
-
-
 int DL(char *cmd, int sock) {
 	
 	// Send command to the server
@@ -249,16 +240,100 @@ int DL(char *cmd, int sock) {
 	printf("\tMD5 hash: %s ", new_md5);
 	if (match) printf("(matches)\n");
 	else printf("(does not match)\n");
-	
-	// return 0;
+  
+	return 0;
 }
 
 
 int UP(char *cmd, int sock) {
+	// Send command to the server if file exists
+	char *up = strtok(cmd, " ");
+	char *filename = strtok(NULL, "\n");
+	FILE *fp = fopen(filename, "r");
+	if (fp == NULL) {
+		printf("File doesn't exist\n");
+		return 0;
+	}
+	// If file is empty, don't go
+	fseek(fp, 0L, SEEK_END);
+    int sz1 = ftell(fp);
+    rewind(fp);
+	if (sz1 == 0) {
+		printf("File is empty, aborted\n");
+		return 0;
+	}
 	if (send(sock, "UP", strlen("UP"), 0) < 0) {
 		printf("client send error\n");
 		return 1;
 	}
+	// Send file name to server
+	if (send(sock, filename, strlen(filename), 0) < 0) {
+		fprintf(stderr, "Client could not send file name: %s\n", strerror(errno));
+		return 1;
+	}
+	
+	// recv ACK from server
+	char ack_buf[4];
+	char *ack = ack_buf;
+	if (recv(sock, ack, 4, 0) < 0) {
+		fprintf(stderr, "recv ack failed\n");
+		return 1;
+	}
+	
+	// Send size of file
+	fseek(fp, 0L, SEEK_END);
+    int sz = ftell(fp);
+    rewind(fp);
+    char szbuf[100];
+    sprintf(szbuf, "%d", sz);
+    if (send(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+        fprintf(stderr, "server send error sending size of file: %s\n",               strerror(errno));
+        return 1;
+    }
+
+	// Send md5 hash of file
+	char md5_buf[4096];
+    char *md5_cmd = md5_buf;
+    strcpy(md5_cmd, "md5sum ");
+    strcat(md5_cmd, filename);
+    FILE *in = popen(md5_cmd, "r");
+    char new_md5_buf[33];
+    char *md5 = new_md5_buf;
+    fgets(md5, sizeof(new_md5_buf), in);
+    fclose(in);
+    md5[32] = '\0';
+    if (send(sock, md5, 33, 0) < 0) {
+        fprintf(stderr, "server send error: %s\n", strerror(errno));
+        return 1;
+    }
+	
+	// Start reading from file and sending
+	char get_buf[256];
+    void *get = get_buf;
+    memset(get, '\0', 256);
+    int n;
+    while ((n = fread(get, 1, 256, fp)) == 256) {
+        if (send(sock, get, 256, 0) < 0) {
+            fprintf(stderr, "Couldn't send part of file to client: %s\n",             strerror(errno));
+            return 1;
+        }
+
+        memset(get, '\0', 256);
+    }
+    if (send(sock, get, n, 0) < 0) {
+        fprintf(stderr, "Couldn't send part of file to client\n");
+        return 1;
+    }
+	
+	// recv string to echo
+	char ret_buf[4096];
+	char *ret_str = ret_buf;
+	if (recv(sock, ret_str, 4096, 0) < 0) {
+		fprintf(stderr, "return string recv error\n");
+		return 1;
+	}
+	printf("%s", ret_str);
+	
 	return 0;
 }
 
@@ -325,12 +400,12 @@ int LS(char *cmd, int sock) {
 	char * buff;
 	recv(sock, buff, BUFSIZ, 0);
 	printf("%s\n", buff);
+  
 	return 0;
 }
 
 
 int MKDIR(char *cmd, int sock) {
-
     char *token = strtok(cmd, " ");
     char * dirName = strtok(NULL, " ");
     char dirNameLen[BUFSIZ];
@@ -429,7 +504,6 @@ int CD(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
-
 	if(send(sock, dirNameLen, strlen(dirNameLen), 0) < 0){
 		fprintf(stderr, "client send error: %d", strerror(errno));
 	}
@@ -450,4 +524,3 @@ int CD(char *cmd, int sock) {
 	}
 	return 0;
 }
-
