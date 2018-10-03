@@ -203,14 +203,71 @@ int UP(char *cmd, int sock) {
 
 
 int RM(char *cmd, int sock) {
+	char fileNameLen[BUFSIZ];
+	if(recv(sock, fileNameLen, sizeof(fileNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(fileNameLen, " ");
+	char *fileName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	fileName[len - 1] = '\0';
+	char *returnNum;	
+
+	FILE *f = fopen(fileName, "r");
+	if (f){
+		returnNum = "1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+		char userAnswer[BUFSIZ];
+		if(recv(sock, userAnswer, BUFSIZ, 0) < 0){
+			fprintf(stderr, "Recv failed: %d\n", strerror(errno));
+			return 1;
+		}
+		if(strcmp(userAnswer, "Yes\n") == 0){
+			if(remove(fileName) < 0){
+				returnNum = "-1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 1;
+				}
+				return 0;
+			}
+			else{
+				returnNum = "1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 0;
+				}
+			}
+		}
+		else{
+			printf("Delete abandoned by the user!\n");
+		}
+		return 0;
+	}
+	else{
+		fprintf(stderr, "fopen failed: %d\n", strerror(errno));
+		returnNum = "-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}	
+	}
+		
 	return 0;
 }
 
 
 int LS(char *cmd, int sock) {
+	printf("fUcK\n");
 	DIR *d;
     struct dirent *dir;
-    d = opendir(".");
+	char *curDir;
+	char *anything;
+	anything = getcwd(curDir,BUFSIZ);
+	d = opendir(anything);
     if (d)
     {
     	char buff1[BUFSIZ];
@@ -248,6 +305,11 @@ int LS(char *cmd, int sock) {
         strcat(buff2,buff1);
         send(sock, buff2, sizeof(buff2), 0);
         closedir(d);
+
+		memset(buff1, 0, sizeof(buff1));
+		memset(buff2, 0, sizeof(buff2));
+		//buff1="";
+		//buff2="";
     }
 	return 0;
 }
@@ -413,30 +475,4 @@ int CD(char *cmd, int sock) {
 	}
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
