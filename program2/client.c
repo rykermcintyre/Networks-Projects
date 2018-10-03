@@ -36,7 +36,7 @@ int main() {
 	
 	// ************ CHANGE THIS TO ACCEPT CMD LINE ARGS LATER ************
 	char* server_name = "student06.cse.nd.edu";
-	const int server_port = 41032;
+	const int server_port = 41023;
 
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
@@ -211,6 +211,7 @@ int DL(char *cmd, int sock) {
 		fprintf(stderr, "Recving md5 failed\n");
 		return 1;
 	}
+
 	
 	// Make the file you're trying to download
 	char touch_buf[4096];
@@ -278,7 +279,7 @@ int DL(char *cmd, int sock) {
 	if (match) printf("(matches)\n");
 	else printf("(does not match)\n");
 	
-	return 0;
+	// return 0;
 }
 
 
@@ -305,6 +306,11 @@ int LS(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
+
+	char * buff;
+	recv(sock, buff, BUFSIZ, 0);
+	printf("%s\n", buff);
+
 	return 0;
 }
 
