@@ -223,7 +223,7 @@ int MKDIR(char *cmd, int sock) {
 	printf("len: %d", len);
 	dirName[len - 1] = '\0';
 	char *returnNum;	
-
+	printf("%s\n", dirName);
 	DIR *dir = opendir(dirName);
 	if (dir){
 		closedir(dir);
@@ -232,7 +232,7 @@ int MKDIR(char *cmd, int sock) {
 			fprintf(stderr, "Send failed: %d\n", strerror(errno));
 			return 1;
 		}
-		return 1;
+		return 0;
 	}
 	else if (ENOENT == errno){
 	    /* Directory does not exist. */
@@ -261,11 +261,9 @@ int RMDIR(char *cmd, int sock) {
 	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
 		fprintf(stderr, "server recv error: %d\n", strerror(errno));
 	}
-	printf("damn damn %s hahaha\n", dirNameLen);
 	char *token = strtok(dirNameLen, " ");
 	char *dirName = strtok(NULL, " ");
 	short int len = ntohs(atoi(token));
-	printf("len: %d", len);
 	dirName[len - 1] = '\0';
 	char *returnNum;	
 
@@ -282,7 +280,9 @@ int RMDIR(char *cmd, int sock) {
 			returnNum = "-2";
 			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
 				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				return 1;
 			}
+			return 0;
 		}
 		returnNum = "1";
 		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
@@ -294,27 +294,26 @@ int RMDIR(char *cmd, int sock) {
 			fprintf(stderr, "Recv failed: %d\n", strerror(errno));
 			return 1;
 		}
-		if(strcmp(userAnswer, "Yes") == 0){
+		if(strcmp(userAnswer, "Yes\n") == 0){
 			if(rmdir(dirName) < 0){
 				returnNum = "-1";
 				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
 					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 1;
 				}
+				return 0;
 			}
 			else{
 				returnNum = "1";
 				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
 					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+					return 0;
 				}
 			}
 		}
-		else if(strcmp(userAnswer, "No") == 0){
+		else{
 			printf("Delete abandoned by the user!\n");
 		}
-		else{
-			return 1;
-		}
-		
 		return 0;
 	}
 	else if (ENOENT == errno){

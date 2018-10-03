@@ -250,13 +250,13 @@ int MKDIR(char *cmd, int sock) {
 		fprintf(stderr, "client recv failed: %d", strerror(errno));
 	}
 	int n = atoi(returnNum);
-	if(n == 1){
+	if(n == 1 || n == 12){
 		printf("The directory was successfully made\n");
 	}
 	else if(n == -1){
 		printf("Error in making directory\n");
 	}
-	else{
+	else if(n == -2){
 		printf("The directory already exists on the server\n");
 	}
 	return 0;
@@ -264,11 +264,6 @@ int MKDIR(char *cmd, int sock) {
 
 
 int RMDIR(char *cmd, int sock) {
-	if (send(sock, "RMDIR", strlen("RMDIR"), 0) < 0) {
-		printf("client send error\n");
-		return 1;
-	}
-    
 	char *token = strtok(cmd, " ");
     char * dirName = strtok(NULL, " ");
     char dirNameLen[BUFSIZ];
@@ -293,11 +288,11 @@ int RMDIR(char *cmd, int sock) {
 	else if(n == -1){
 		printf("The directory does not exist on server\n");
 	}
-	else if(n == 1){
+	else if(n >= 0){
 		printf("Are you sure you want to delete the directory? Reply Yes if sure, reply No to abandon the delete\n");
 		char confirm[10];
 		fgets(confirm, 10, stdin);
-		if(strcmp(confirm, "Yes") == 0){
+		if(strcmp(confirm, "Yes\n") == 0){
 			if(send(sock, confirm, strlen(confirm), 0) < 0){
 				fprintf(stderr, "send failed: %d\n", strerror(errno));
 			}
@@ -311,6 +306,12 @@ int RMDIR(char *cmd, int sock) {
 			}
 			else{
 				printf("Failed to delete directory\n");
+			}
+		}
+		else{
+			if(send(sock, confirm, strlen(confirm), 0) < 0){
+				fprintf(stderr, "send failed: %d\n", strerror(errno));
+				return 1;
 			}
 		}
 	}
