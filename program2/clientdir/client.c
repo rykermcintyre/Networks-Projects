@@ -40,11 +40,6 @@ int main(int argc, char *argv[]) {
 	}
 	char* server_name = argv[1];
 	const int server_port = atoi(argv[2]);
-	
-
-	// ************ CHANGE THIS TO ACCEPT CMD LINE ARGS LATER ************
-	char* server_name = "student06.cse.nd.edu";
-	const int server_port = 41023;
 
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
