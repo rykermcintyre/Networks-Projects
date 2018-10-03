@@ -20,6 +20,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <sys/stat.h>
+#include <dirent.h>
 
 /**
  * TCP Uses 2 types of sockets, the connection socket and the listen socket.
@@ -38,7 +40,7 @@ int CD(char *, int);
 int main(int argc, char *argv[]) {
 	// port to start the server on
 	// ************* CHANGE TO ACCEPT CMD LINE ARG LATER **************
-	int SERVER_PORT = 41032;
+	int SERVER_PORT = 41038;
 
 	// socket address used for the server
 	struct sockaddr_in server_address;
@@ -164,8 +166,7 @@ int main(int argc, char *argv[]) {
 			}
 			else {
 				fprintf(stderr, "error in receiving command\n");
-			}
-			
+			}	
 			memset(pbuffer, '\0', maxlen);
 		}
 		close(sock);
@@ -212,6 +213,44 @@ int LS(char *cmd, int sock) {
 
 
 int MKDIR(char *cmd, int sock) {
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+
+	DIR *dir = opendir(dirName);
+	if (dir){
+		closedir(dir);
+		returnNum = "-2";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+		return 1;
+	}
+	else if (ENOENT == errno){
+	    /* Directory does not exist. */
+			mkdir(dirName, 0700);
+			returnNum = "1";
+			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				return 1;
+			}	
+	}
+	else{
+		fprintf(stderr, "opendir failed: %d\n", strerror(errno));
+		returnNum = "-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}	
+	}
+		
 	return 0;
 }
 

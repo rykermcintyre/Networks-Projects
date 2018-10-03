@@ -35,7 +35,7 @@ int main() {
 	
 	// ************ CHANGE THIS TO ACCEPT CMD LINE ARGS LATER ************
 	char* server_name = "student06.cse.nd.edu";
-	const int server_port = 41032;
+	const int server_port = 41038;
 
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
@@ -231,9 +231,33 @@ int LS(char *cmd, int sock) {
 
 
 int MKDIR(char *cmd, int sock) {
+
+    char *token = strtok(cmd, " ");
+    char * dirName = strtok(NULL, " ");
+    char dirNameLen[BUFSIZ];
+    short len = strlen(dirName);
+    len = htons(len);
+	sprintf(dirNameLen, "%d %s", len, dirName); // Read vars in buffer dirNamelen
 	if (send(sock, "MKDIR", strlen("MKDIR"), 0) < 0) {
 		printf("client send error\n");
 		return 1;
+	}
+	if(send(sock, dirNameLen, strlen(dirNameLen), 0) < 0){
+		fprintf(stderr, "client send error: %d", strerror(errno));
+	}
+	char returnNum[BUFSIZ];
+	if(recv(sock, returnNum, BUFSIZ, 0) < 0){
+		fprintf(stderr, "client recv failed: %d", strerror(errno));
+	}
+	int n = atoi(returnNum);
+	if(n == 1){
+		printf("The directory was successfully made\n");
+	}
+	else if(n == -1){
+		printf("Error in making directory\n");
+	}
+	else{
+		printf("The directory already exists on the server\n");
 	}
 	return 0;
 }
