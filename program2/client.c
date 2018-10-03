@@ -19,6 +19,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
+#include <sys/time.h>
 
 // *********** CHANGE ALL ERROR PRINTFS TO FPRINTF(STDERR,...) IF TIME
 
@@ -40,6 +41,11 @@ int main(int argc, char *argv[]) {
 	char* server_name = argv[1];
 	const int server_port = atoi(argv[2]);
 	
+
+	// ************ CHANGE THIS TO ACCEPT CMD LINE ARGS LATER ************
+	char* server_name = "student06.cse.nd.edu";
+	const int server_port = 41023;
+
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
 	server_address.sin_family = AF_INET;
@@ -81,10 +87,8 @@ int main(int argc, char *argv[]) {
 		fgets(cmd, 4096, stdin);
 		if (strncmp(cmd, "DL", 2) == 0) {
 			if (DL(cmd, sock) != 0) {
-				fprintf(stderr, "Client command failed\n");
-				return 1;
+				continue;
 			}
-			printf("Got DL\n");
 		}
 		else if (strncmp(cmd, "UP", 2) == 0) {
 			if (UP(cmd, sock) != 0) {
@@ -180,29 +184,110 @@ while (fgets(output, sizeof(output), in) > 0) {
 
 
 int DL(char *cmd, int sock) {
+	
 	// Send command to the server
-	if (send(sock, "DL", strlen("DL"), 0) < 0) {
+	char *dl = strtok(cmd, " ");
+	if (send(sock, dl, strlen(dl), 0) < 0) {
 		printf("client send error\n");
 		return 1;
 	}
 	
-	// break apart command
-	char *dl = strtok(cmd, " ");
-	char *file = strtok(cmd, " ");
-	short int len = htons(strlen(file));
-	
-	// Send length of file name then file name
-	if (send(sock, (char *)&len, sizeof(short int), 0) < 0) {
-		fprintf(stderr, "client send error 1\n");
-		return 1;
-	}
-	if (send(sock, file, len, 0) < 0) {
-		fprintf(stderr, "client send error\n");
+	// Send file name to server
+	char *filename = strtok(NULL, "\n");
+	if (send(sock, filename, strlen(filename), 0) < 0) {
+		fprintf(stderr, "Client could not send file name: %s\n", strerror(errno));
 		return 1;
 	}
 	
+	// recv file size from server
+	char szbuf[100];
+	if (recv(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+		fprintf(stderr, "Receiving file size failed\n");
+		return 1;
+	}
+	int sz = atoi((char *)szbuf);
 	
-	return 0;
+	if (sz == -1) {
+		printf("File doesn't exist\n");
+		return 1;
+	}
+	
+	// recv md5 hash of file
+	char md5_buf[33];
+	char *md5 = md5_buf;
+	if (recv(sock, md5, sizeof(md5_buf), 0) < 0) {
+		fprintf(stderr, "Recving md5 failed\n");
+		return 1;
+	}
+
+	
+	// Make the file you're trying to download
+	char touch_buf[4096];
+	char *touch_cmd = touch_buf;
+	strcpy(touch_cmd, "touch ");
+	char *new_filename_ptr = strrchr(filename, '/');
+	char new_filename_buf[4096];
+	char *new_filename = new_filename_buf;
+	if (new_filename_ptr == NULL) {
+		strcpy(new_filename, filename);
+		strcat(touch_cmd, new_filename);
+	}
+	else {
+		strcpy(new_filename, new_filename_ptr);
+		new_filename++;
+		strcat(touch_cmd, new_filename);
+	}
+	system(touch_cmd);
+	
+	// Recv contents of file and write to file and calc time
+	FILE *new_file = fopen(new_filename, "w");
+	int f_no = fileno(new_file);
+	char get_buf[256];
+	void *get = get_buf;
+	memset(get, '\0', 256);
+	ssize_t n;
+	int fsize = 0;
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	double start_sec = start.tv_sec;
+	double start_usec = start.tv_usec;
+	while ((n = recv(sock, get, 256, 0)) == 256) {
+		write(f_no, get, 256);
+		memset(get, '\0', 256);
+		fsize += n;
+	}
+	write(f_no, get, (int)n);
+	gettimeofday(&end, NULL);
+	double end_sec = end.tv_sec;
+	double end_usec = end.tv_usec;
+	double elapsed = (end_sec - start_sec) + (end_usec - start_usec)/1000000;
+	fsize += n;
+	
+	// Get new md5 hash
+	char a_md5_buf[4096];
+	char *md5_cmd = a_md5_buf;
+ 	strcpy(md5_cmd, "md5sum ");
+ 	strcat(md5_cmd, new_filename);
+ 	FILE *in = popen(md5_cmd, "r");
+ 	char new_md5_buf[33];
+ 	char *new_md5 = new_md5_buf;
+ 	fgets(new_md5, sizeof(new_md5_buf), in);
+ 	new_md5[32] = '\0';
+	
+	// Check md5sums
+	int match = 0;
+	if (strcmp(md5, new_md5) == 0) {
+		match = 1;
+	}
+	
+	// Tell user what happened
+	double mbps = ((double)fsize/1000000)/elapsed;
+	printf("%d bytes transferred in %.06f seconds: %.06f Megabytes/sec\n", fsize, elapsed, mbps);
+	printf("\tMD5 hash: %s ", new_md5);
+	if (match) printf("(matches)\n");
+	else printf("(does not match)\n");
+	
+	// return 0;
 }
 
 
@@ -273,10 +358,10 @@ int LS(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
+
 	char * buff;
 	recv(sock, buff, BUFSIZ, 0);
 	printf("%s\n", buff);
-	
 	return 0;
 }
 

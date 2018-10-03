@@ -38,7 +38,6 @@ int CD(char *, int);
 
 
 int main(int argc, char *argv[]) {
-	
 	if (argc!=2) {
 		printf("Enter valid arguments: ./myftpd [Port]\n");
 		exit(EXIT_FAILURE);
@@ -68,7 +67,7 @@ int main(int argc, char *argv[]) {
 	// bind it to listen to the incoming connections on the created server
 	// address, will return -1 on error
 	if ((bind(listen_sock, (struct sockaddr *)&server_address, sizeof(server_address))) < 0) {
-		printf("could not bind socket\n");
+		fprintf(stderr, "could not bind socket: %s\n", strerror(errno));
 		return 1;
 	}
 
@@ -103,7 +102,8 @@ int main(int argc, char *argv[]) {
 		printf("Connection established\n");
 
 		// keep running as long as the client keeps the connection open
-		while ((n = recv(sock, pbuffer, maxlen, 0)) > 0) {
+		memset(pbuffer, '\0', maxlen);
+		while (n = recv(sock, pbuffer, maxlen, 0) > 0) {
 			// Don't know what the following three lines of code are for,
 			// but they mess it up I think.  Gonna leave them commented for now.
 			//pbuffer += n;
@@ -119,12 +119,15 @@ int main(int argc, char *argv[]) {
 				printf("server echo error\n");
 				return 1;
 			}*/
+			
+			// REceive the command
+			
+			// All cases, call functions
 			if (strncmp(pbuffer, "DL", 2) == 0) {
 				if (DL(pbuffer, sock) != 0) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got DL\n");
 			}
 			else if (strncmp(pbuffer, "UP", 2) == 0) {
 				if (UP(pbuffer, sock) != 0) {
@@ -145,7 +148,6 @@ int main(int argc, char *argv[]) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got LS\n");
 			}
 			else if (strncmp(pbuffer, "MKDIR", 5) == 0) {
 				if (MKDIR(pbuffer, sock) != 0) {
@@ -182,20 +184,72 @@ int main(int argc, char *argv[]) {
 
 int DL(char *cmd, int sock) {
 	
-	// Receive len of filename and filename
-	short int len;
-	if (recv(sock, (char *)&len, sizeof(short int), 0) < 0) {
-		fprintf(stderr, "server recv error\n");
-		return 1;
-	}
-	len = ntohs(len);
-	
-	char file[len];
-	if (recv(sock, file, len, 0) < 0) {
-		fprintf(stderr, "server recv error\n");
+	// Recv file name
+	char filename_buf[4096];
+	char *filename = filename_buf;
+	memset(filename, '\0', 4096);
+	if (recv(sock, filename, 4096, 0) < 0) {
+		fprintf(stderr, "Server could not recv file name: %s\n", strerror(errno));
 		return 1;
 	}
 	
+	// Try to open file
+	FILE *fp = fopen(filename, "r");
+	if (fp == NULL) {
+		char *neg1 = "-1";
+		if (send(sock, neg1, sizeof(neg1), 0) < 0) {
+			fprintf(stderr, "Could not send -1 to client\n");
+			return 1;
+		}
+	}
+	else {
+		// Send size of file
+		fseek(fp, 0L, SEEK_END);
+		int sz = ftell(fp);
+		rewind(fp);
+		char szbuf[100];
+		sprintf(szbuf, "%d", sz);
+		if (send(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+			fprintf(stderr, "server send error sending size of file: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		// Send md5 hash of file
+		char md5_buf[4096];
+		char *md5_cmd = md5_buf;
+		strcpy(md5_cmd, "md5sum ");
+		strcat(md5_cmd, filename);
+		FILE *in = popen(md5_cmd, "r");
+		char new_md5_buf[33];
+		char *md5 = new_md5_buf;
+		fgets(md5, sizeof(new_md5_buf), in);
+		fclose(in);
+		md5[32] = '\0';
+		if (send(sock, md5, 33, 0) < 0) {
+			fprintf(stderr, "server send error: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		// Start reading from file and sending
+		char get_buf[256];
+		void *get = get_buf;
+		memset(get, '\0', 256);
+		int n;
+		while ((n = fread(get, 1, 256, fp)) == 256) {
+			if (send(sock, get, 256, 0) < 0) {
+				fprintf(stderr, "Couldn't send part of file to client: %s\n", strerror(errno));
+				return 1;
+			}
+			
+			memset(get, '\0', 256);
+		}
+		if (send(sock, get, n, 0) < 0) {
+			fprintf(stderr, "Couldn't send part of file to client\n");
+			return 1;
+		}
+		
+	}
+
 	
 	return 0;
 }
@@ -265,13 +319,13 @@ int RM(char *cmd, int sock) {
 
 
 int LS(char *cmd, int sock) {
-	printf("fUcK\n");
 	DIR *d;
-    struct dirent *dir;
+  struct dirent *dir;
 	char *curDir;
 	char *anything;
 	anything = getcwd(curDir,BUFSIZ);
 	d = opendir(anything);
+
     if (d)
     {
     	char buff1[BUFSIZ];
@@ -287,7 +341,8 @@ int LS(char *cmd, int sock) {
 			        return 1;
 
 			    size+=fileStat.st_size;
-				strcat(buff1, (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
+
+				  strcat(buff1, (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
 			    strcat(buff1, (fileStat.st_mode & S_IRUSR) ? "r" : "-");
 			    strcat(buff1, (fileStat.st_mode & S_IWUSR) ? "w" : "-");
 			    strcat(buff1, (fileStat.st_mode & S_IXUSR) ? "x" : "-");
@@ -309,7 +364,7 @@ int LS(char *cmd, int sock) {
         strcat(buff2,buff1);
         send(sock, buff2, sizeof(buff2), 0);
         closedir(d);
-
+      
 		memset(buff1, 0, sizeof(buff1));
 		memset(buff2, 0, sizeof(buff2));
 		//buff1="";
