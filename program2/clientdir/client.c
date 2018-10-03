@@ -165,6 +165,10 @@ int DL(char *cmd, int sock) {
 		printf("File doesn't exist\n");
 		return 1;
 	}
+	if (sz == -2) {
+		printf("File is empty, aborted\n");
+		return 1;
+	}
 	
 	// recv md5 hash of file
 	char md5_buf[33];
@@ -396,8 +400,9 @@ int LS(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
-
-	char * buff;
+	
+	char buff_buff[BUFSIZ];
+	char * buff = buff_buff;
 	recv(sock, buff, BUFSIZ, 0);
 	printf("%s\n", buff);
   

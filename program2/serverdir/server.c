@@ -104,24 +104,6 @@ int main(int argc, char *argv[]) {
 		// keep running as long as the client keeps the connection open
 		memset(pbuffer, '\0', maxlen);
 		while (n = recv(sock, pbuffer, maxlen, 0) > 0) {
-			// Don't know what the following three lines of code are for,
-			// but they mess it up I think.  Gonna leave them commented for now.
-			//pbuffer += n;
-			//maxlen -= n;
-			//len += n;
-			
-			// The following lines were from a simple server DELETE LATER
-			/*
-			printf("server received: '%s'\n", buffer);
-
-			// echo received content back
-			if (send(sock, buffer, len, 0) < 0) {
-				printf("server echo error\n");
-				return 1;
-			}*/
-			
-			// REceive the command
-			
 			// All cases, call functions
 			if (strncmp(pbuffer, "DL", 2) == 0) {
 				if (DL(pbuffer, sock) != 0) {
@@ -203,8 +185,8 @@ int DL(char *cmd, int sock) {
 		int sz = ftell(fp);
 		rewind(fp);
 		if (sz == 0) {
-			char *neg1 = "-1";
-			if (send(sock, neg1, sizeof(neg1), 0) < 0) {
+			char *neg2 = "-2";
+			if (send(sock, neg2, sizeof(neg2), 0) < 0) {
 				fprintf(stderr, "Could not send -1 to client\n");
 				return 1;
 			}
@@ -493,10 +475,8 @@ int MKDIR(char *cmd, int sock) {
 	char *token = strtok(dirNameLen, " ");
 	char *dirName = strtok(NULL, " ");
 	short int len = ntohs(atoi(token));
-	printf("len: %d", len);
 	dirName[len - 1] = '\0';
 	char *returnNum;	
-	printf("%s\n", dirName);
 	DIR *dir = opendir(dirName);
 	if (dir){
 		closedir(dir);
