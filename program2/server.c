@@ -131,14 +131,12 @@ int main(int argc, char *argv[]) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got UP\n");
 			}
 			else if (strncmp(pbuffer, "RMDIR", 5) == 0) {
 				if (RMDIR(pbuffer, sock) != 0) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got RMDIR\n");
 			}
 			else if (strncmp(pbuffer, "LS", 2) == 0) {
 				if (LS(pbuffer, sock) != 0) {
@@ -151,21 +149,18 @@ int main(int argc, char *argv[]) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got MKDIR\n");
 			}
 			else if (strncmp(pbuffer, "RM", 2) == 0) {
 				if (RM(pbuffer, sock) != 0) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got RM\n");
 			}
 			else if (strncmp(pbuffer, "CD", 2) == 0) {
 				if (CD(pbuffer, sock) != 0) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got CD\n");
 			}
 			else {
 				continue;
@@ -191,6 +186,195 @@ int DL(char *cmd, int sock) {
 		return 1;
 	}
 	
+	// Try to open file
+	FILE *fp = fopen(filename, "r");
+	if (fp == NULL) {
+		char *neg1 = "-1";
+		if (send(sock, neg1, sizeof(neg1), 0) < 0) {
+			fprintf(stderr, "Could not send -1 to client\n");
+			return 1;
+		}
+	}
+	else {
+		// Send size of file
+		fseek(fp, 0L, SEEK_END);
+		int sz = ftell(fp);
+		rewind(fp);
+		
+		if (sz == 0) {
+			char *neg1 = "-1";
+			if (send(sock, neg1, sizeof(neg1), 0) < 0) {
+				fprintf(stderr, "Could not send -1 to client\n");
+				return 1;
+			}
+		}
+		
+		char szbuf[100];
+		sprintf(szbuf, "%d", sz);
+		if (send(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+			fprintf(stderr, "server send error sending size of file: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		// Send md5 hash of file
+		char md5_buf[4096];
+		char *md5_cmd = md5_buf;
+		strcpy(md5_cmd, "md5sum ");
+		strcat(md5_cmd, filename);
+		FILE *in = popen(md5_cmd, "r");
+		char new_md5_buf[33];
+		char *md5 = new_md5_buf;
+		fgets(md5, sizeof(new_md5_buf), in);
+		fclose(in);
+		md5[32] = '\0';
+		if (send(sock, md5, 33, 0) < 0) {
+			fprintf(stderr, "server send error: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		// Start reading from file and sending
+		char get_buf[256];
+		void *get = get_buf;
+		memset(get, '\0', 256);
+		int n;
+		while ((n = fread(get, 1, 256, fp)) == 256) {
+			if (send(sock, get, 256, 0) < 0) {
+				fprintf(stderr, "Couldn't send part of file to client: %s\n", strerror(errno));
+				return 1;
+			}
+			
+			memset(get, '\0', 256);
+		}
+		if (send(sock, get, n, 0) < 0) {
+			fprintf(stderr, "Couldn't send part of file to client\n");
+			return 1;
+		}
+		
+	}
+
+	
+	return 0;
+}
+
+
+int UP(char *cmd, int sock) {
+	// Recv file name
+	char filename_buf[4096];
+	char *filename = filename_buf;
+	memset(filename, '\0', 4096);
+	if (recv(sock, filename, 4096, 0) < 0) {
+		fprintf(stderr, "Server could not recv file name: %s\n", strerror(errno));
+		return 1;
+	}
+	
+	// Touch a file w filename
+	char touch_buf[4096];
+	char *touch_cmd = touch_buf;
+	strcpy(touch_cmd, "touch ");
+	char *new_filename_ptr = strrchr(filename, '/');
+	char new_filename_buf[4096];
+	char *new_filename = new_filename_buf;
+	if (new_filename_ptr == NULL) {
+		strcpy(new_filename, filename);
+		strcat(touch_cmd, new_filename);
+	}
+	else {
+		strcpy(new_filename, new_filename_ptr);
+		new_filename++;
+		strcat(touch_cmd, new_filename);
+	}
+	system(touch_cmd);
+	
+	// Ack to recv
+	if (send(sock, "ACK", 4, 0) < 0) {
+		fprintf(stderr, "ACK failed\n");
+		return 1;
+	}
+	
+	// recv file size from server
+	char szbuf[100];
+    if (recv(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+        fprintf(stderr, "Receiving file size failed\n");
+        return 1;
+    }
+    int sz = atoi((char *)szbuf);
+
+    if (sz == -1) {
+        printf("File doesn't exist\n");
+        return 1;
+    }
+
+	// recv md5 hash of file
+	char md5_buf[33];
+    char *md5 = md5_buf;
+    if (recv(sock, md5, sizeof(md5_buf), 0) < 0) {
+        fprintf(stderr, "Recving md5 failed\n");
+        return 1;
+    }
+	
+	// Recv contents of file and write to file and calc time
+    FILE *new_file = fopen(new_filename, "w");
+    int f_no = fileno(new_file);
+    char get_buf[256];
+    void *get = get_buf;
+    memset(get, '\0', 256);
+    ssize_t n;
+    int fsize = 0;
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    double start_sec = start.tv_sec;
+    double start_usec = start.tv_usec;
+    while ((n = recv(sock, get, 256, 0)) == 256) {
+        write(f_no, get, 256);
+        memset(get, '\0', 256);
+        fsize += n;
+    }
+    write(f_no, get, (int)n);
+    gettimeofday(&end, NULL);
+    double end_sec = end.tv_sec;
+    double end_usec = end.tv_usec;
+    double elapsed = (end_sec - start_sec) + (end_usec - start_usec)/1000000;
+    fsize += n;
+	
+	// Get new md5 hash
+	char a_md5_buf[4096];
+    char *md5_cmd = a_md5_buf;
+    strcpy(md5_cmd, "md5sum ");
+    strcat(md5_cmd, new_filename);
+    FILE *in = popen(md5_cmd, "r");
+    char new_md5_buf[33];
+    char *new_md5 = new_md5_buf;
+    fgets(new_md5, sizeof(new_md5_buf), in);
+    new_md5[32] = '\0';
+	
+	// Check md5sums
+	int match = 0;
+    if (strcmp(md5, new_md5) == 0) {
+        match = 1;
+    }
+	
+	// Create string for what happened
+	double mbps = ((double)fsize/1000000)/elapsed;
+	char ret_buf[4096];
+	char *ret_str = ret_buf;
+    sprintf(ret_str, "%d bytes transferred in %.06f seconds: %.06f Megabytes/sec\n", fsize, elapsed, mbps);
+	char ret_next[4096];
+	char *ret_next_str = ret_next;
+    sprintf(ret_next_str, "\tMD5 hash: %s ", new_md5);
+	strcat(ret_str, ret_next_str);
+	memset(ret_next_str, '\0', 4096);
+    if (match) sprintf(ret_next_str, "(matches)\n");
+    else sprintf(ret_next_str, "(does not match)\n");
+	strcat(ret_str, ret_next_str);
+	
+	// Send string back to client to echo
+	if (send(sock, ret_str, strlen(ret_str) + 1, 0) < 0) {
+		fprintf(stderr, "return string send error\n");
+		return 1;
+	}
+	
+	// =============================================================
+	/*
 	// Try to open file
 	FILE *fp = fopen(filename, "r");
 	if (fp == NULL) {
@@ -246,14 +430,7 @@ int DL(char *cmd, int sock) {
 			return 1;
 		}
 		
-	}
-
-	
-	return 0;
-}
-
-
-int UP(char *cmd, int sock) {
+	}*/
 	return 0;
 }
 

@@ -87,45 +87,38 @@ int main() {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got UP\n");
 		}
 		else if (strncmp(cmd, "RMDIR", 5) == 0) {
 			if (RMDIR(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got RMDIR\n");
 		}
 		else if (strncmp(cmd, "LS", 2) == 0) {
 			if (LS(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got LS\n");
 		}
 		else if (strncmp(cmd, "MKDIR", 5) == 0) {
 			if (MKDIR(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got MKDIR\n");
 		}
 		else if (strncmp(cmd, "RM", 2) == 0) {
 			if (RM(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got RM\n");
 		}
 		else if (strncmp(cmd, "CD", 2) == 0) {
 			if (CD(cmd, sock) != 0) {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got CD\n");
 		}
 		else if (strncmp(cmd, "EXIT", 4) == 0) {
-			printf("Got EXIT\n");
 			if (send(sock, "", 0, 0) < 0) {
 				printf("client send error\n");
 				return 1;
@@ -279,15 +272,191 @@ int DL(char *cmd, int sock) {
 	if (match) printf("(matches)\n");
 	else printf("(does not match)\n");
 	
-	// return 0;
+	return 0;
 }
 
 
 int UP(char *cmd, int sock) {
+	// Send command to the server if file exists
+	char *up = strtok(cmd, " ");
+	char *filename = strtok(NULL, "\n");
+	FILE *fp = fopen(filename, "r");
+	if (fp == NULL) {
+		printf("File doesn't exist\n");
+		return 0;
+	}
+	// If file is empty, don't go
+	fseek(fp, 0L, SEEK_END);
+    int sz1 = ftell(fp);
+    rewind(fp);
+	if (sz1 == 0) {
+		printf("File is empty, aborted\n");
+		return 0;
+	}
+	
 	if (send(sock, "UP", strlen("UP"), 0) < 0) {
 		printf("client send error\n");
 		return 1;
 	}
+	
+	// Send file name to server
+	if (send(sock, filename, strlen(filename), 0) < 0) {
+		fprintf(stderr, "Client could not send file name: %s\n", strerror(errno));
+		return 1;
+	}
+	
+	// recv ACK from server
+	char ack_buf[4];
+	char *ack = ack_buf;
+	if (recv(sock, ack, 4, 0) < 0) {
+		fprintf(stderr, "recv ack failed\n");
+		return 1;
+	}
+	
+	// Send size of file
+	fseek(fp, 0L, SEEK_END);
+    int sz = ftell(fp);
+    rewind(fp);
+    char szbuf[100];
+    sprintf(szbuf, "%d", sz);
+    if (send(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+        fprintf(stderr, "server send error sending size of file: %s\n",               strerror(errno));
+        return 1;
+    }
+
+	// Send md5 hash of file
+	char md5_buf[4096];
+    char *md5_cmd = md5_buf;
+    strcpy(md5_cmd, "md5sum ");
+    strcat(md5_cmd, filename);
+    FILE *in = popen(md5_cmd, "r");
+    char new_md5_buf[33];
+    char *md5 = new_md5_buf;
+    fgets(md5, sizeof(new_md5_buf), in);
+    fclose(in);
+    md5[32] = '\0';
+    if (send(sock, md5, 33, 0) < 0) {
+        fprintf(stderr, "server send error: %s\n", strerror(errno));
+        return 1;
+    }
+	
+	// Start reading from file and sending
+	char get_buf[256];
+    void *get = get_buf;
+    memset(get, '\0', 256);
+    int n;
+    while ((n = fread(get, 1, 256, fp)) == 256) {
+        if (send(sock, get, 256, 0) < 0) {
+            fprintf(stderr, "Couldn't send part of file to client: %s\n",             strerror(errno));
+            return 1;
+        }
+
+        memset(get, '\0', 256);
+    }
+    if (send(sock, get, n, 0) < 0) {
+        fprintf(stderr, "Couldn't send part of file to client\n");
+        return 1;
+    }
+	
+	// recv string to echo
+	char ret_buf[4096];
+	char *ret_str = ret_buf;
+	if (recv(sock, ret_str, 4096, 0) < 0) {
+		fprintf(stderr, "return string recv error\n");
+		return 1;
+	}
+	printf("%s", ret_str);
+	
+	// =============================================================
+	/*
+	// recv file size from server
+	char szbuf[100];
+	if (recv(sock, (char *)szbuf, sizeof(szbuf), 0) < 0) {
+		fprintf(stderr, "Receiving file size failed\n");
+		return 1;
+	}
+	int sz = atoi((char *)szbuf);
+	
+	if (sz == -1) {
+		printf("File doesn't exist\n");
+		return 1;
+	}
+	
+	// recv md5 hash of file
+	char md5_buf[33];
+	char *md5 = md5_buf;
+	if (recv(sock, md5, sizeof(md5_buf), 0) < 0) {
+		fprintf(stderr, "Recving md5 failed\n");
+		return 1;
+	}
+
+	
+	// Make the file you're trying to download
+	char touch_buf[4096];
+	char *touch_cmd = touch_buf;
+	strcpy(touch_cmd, "touch ");
+	char *new_filename_ptr = strrchr(filename, '/');
+	char new_filename_buf[4096];
+	char *new_filename = new_filename_buf;
+	if (new_filename_ptr == NULL) {
+		strcpy(new_filename, filename);
+		strcat(touch_cmd, new_filename);
+	}
+	else {
+		strcpy(new_filename, new_filename_ptr);
+		new_filename++;
+		strcat(touch_cmd, new_filename);
+	}
+	system(touch_cmd);
+	
+	// Recv contents of file and write to file and calc time
+	FILE *new_file = fopen(new_filename, "w");
+	int f_no = fileno(new_file);
+	char get_buf[256];
+	void *get = get_buf;
+	memset(get, '\0', 256);
+	ssize_t n;
+	int fsize = 0;
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	double start_sec = start.tv_sec;
+	double start_usec = start.tv_usec;
+	while ((n = recv(sock, get, 256, 0)) == 256) {
+		write(f_no, get, 256);
+		memset(get, '\0', 256);
+		fsize += n;
+	}
+	write(f_no, get, (int)n);
+	gettimeofday(&end, NULL);
+	double end_sec = end.tv_sec;
+	double end_usec = end.tv_usec;
+	double elapsed = (end_sec - start_sec) + (end_usec - start_usec)/1000000;
+	fsize += n;
+	
+	// Get new md5 hash
+	char a_md5_buf[4096];
+	char *md5_cmd = a_md5_buf;
+ 	strcpy(md5_cmd, "md5sum ");
+ 	strcat(md5_cmd, new_filename);
+ 	FILE *in = popen(md5_cmd, "r");
+ 	char new_md5_buf[33];
+ 	char *new_md5 = new_md5_buf;
+ 	fgets(new_md5, sizeof(new_md5_buf), in);
+ 	new_md5[32] = '\0';
+	
+	// Check md5sums
+	int match = 0;
+	if (strcmp(md5, new_md5) == 0) {
+		match = 1;
+	}
+	
+	// Tell user what happened
+	double mbps = ((double)fsize/1000000)/elapsed;
+	printf("%d bytes transferred in %.06f seconds: %.06f Megabytes/sec\n", fsize, elapsed, mbps);
+	printf("\tMD5 hash: %s ", new_md5);
+	if (match) printf("(matches)\n");
+	else printf("(does not match)\n");
+	*/
 	return 0;
 }
 
