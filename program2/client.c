@@ -35,7 +35,7 @@ int main() {
 	
 	// ************ CHANGE THIS TO ACCEPT CMD LINE ARGS LATER ************
 	char* server_name = "student06.cse.nd.edu";
-	const int server_port = 41032;
+	const int server_port = 41023;
 
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
@@ -178,32 +178,32 @@ while (fgets(output, sizeof(output), in) > 0) {
 
 int DL(char *cmd, int sock) {
 	// Send command to the server
-	char *dl = strtok(cmd, " ");
-	printf("dl: |%s|\n", dl);
-	if (send(sock, dl, strlen(dl), 0) < 0) {
-		printf("client send error\n");
-		return 1;
-	}
+	// char *dl = strtok(cmd, " ");
+	// printf("dl: |%s|\n", dl);
+	// if (send(sock, dl, strlen(dl), 0) < 0) {
+	// 	printf("client send error\n");
+	// 	return 1;
+	// }
 	
-	// break apart command
-	char *file = strtok(NULL, "\n");
-	printf("dl: |%s|\nfile name: |%s|\n", dl, file);
-	short int len = htons(strlen(file));
+	// // break apart command
+	// char *file = strtok(NULL, "\n");
+	// printf("dl: |%s|\nfile name: |%s|\n", dl, file);
+	// short int len = htons(strlen(file));
 	
-	// Send length of file name then file name
-	if (send(sock, (char *)&len, sizeof(short int), 0) < 0) {
-		fprintf(stderr, "client send error 1\n");
-		return 1;
-	}
-	printf("sent length of string: |%d|\n", (int)ntohs(len));
-	if (send(sock, file, len, 0) < 0) {
-		fprintf(stderr, "client send error\n");
-		return 1;
-	}
-	printf("sent string: |%s|\n", file);
+	// // Send length of file name then file name
+	// if (send(sock, (char *)&len, sizeof(short int), 0) < 0) {
+	// 	fprintf(stderr, "client send error 1\n");
+	// 	return 1;
+	// }
+	// printf("sent length of string: |%d|\n", (int)ntohs(len));
+	// if (send(sock, file, len, 0) < 0) {
+	// 	fprintf(stderr, "client send error\n");
+	// 	return 1;
+	// }
+	// printf("sent string: |%s|\n", file);
 	
 	
-	return 0;
+	// return 0;
 }
 
 
@@ -230,6 +230,11 @@ int LS(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
+
+	char * buff;
+	recv(sock, buff, BUFSIZ, 0);
+	printf("%s\n", buff);
+
 	return 0;
 }
 
