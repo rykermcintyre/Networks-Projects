@@ -78,8 +78,7 @@ int main() {
 		fgets(cmd, 4096, stdin);
 		if (strncmp(cmd, "DL", 2) == 0) {
 			if (DL(cmd, sock) != 0) {
-				fprintf(stderr, "Client command failed\n");
-				return 1;
+				continue;
 			}
 			printf("Got DL\n");
 		}
@@ -188,19 +187,45 @@ int DL(char *cmd, int sock) {
 	// break apart command
 	char *file = strtok(NULL, "\n");
 	printf("dl: |%s|\nfile name: |%s|\n", dl, file);
-	short int len = htons(strlen(file));
+	char lensbuf[4096];
+	int file_name_len = strlen(file);
+	sprintf(lensbuf, "%d", file_name_len);
+	char *lens = lensbuf;
 	
 	// Send length of file name then file name
-	if (send(sock, (char *)&len, sizeof(short int), 0) < 0) {
+	if (send(sock, lens, sizeof(lens), 0) < 0) {
 		fprintf(stderr, "client send error 1\n");
 		return 1;
 	}
-	printf("sent length of string: |%d|\n", (int)ntohs(len));
+	short int len = (short int)atoi(lens);
+	printf("sent length of string: |%s|\n", len);
 	if (send(sock, file, len, 0) < 0) {
 		fprintf(stderr, "client send error\n");
 		return 1;
 	}
 	printf("sent string: |%s|\n", file);
+	
+	// Receive size
+	int sz;
+	if (recv(sock, (char *)&sz, sizeof(int), 0) < 0) {
+		fprintf(stderr, "client recv error\n");
+		return 1; // file doesn't exist on server
+	}
+	sz = ntohl(sz);
+	if (sz < 0) {
+		fprintf(stderr, "file doesn't exist\n");
+		return 1;
+	}
+	printf("size of file received: %d\n", sz);
+	
+	// Receive md5
+	char md5[4096];
+	if (recv(sock, md5, 4096, 0) < 0) {
+		fprintf(stderr, "client recv error: %s\n", strerror(errno));
+		return 1; // file doesn't exist on server
+	}
+	printf("md5 is: |%s|\n", md5);
+	
 	
 	
 	return 0;

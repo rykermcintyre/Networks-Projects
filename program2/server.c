@@ -189,14 +189,15 @@ int main(int argc, char *argv[]) {
 int DL(char *cmd, int sock) {
 	
 	// Receive len of filename and filename
-	short int len;
-	if (recv(sock, (char *)&len, sizeof(short int), 0) < 0) {
+	char *lens;
+	if (recv(sock, lens, 4096, 0) < 0) {
 		fprintf(stderr, "server recv error\n");
 		return 1;
 	}
-	len = ntohs(len) + 1;
-	
-	char file[len];
+	short int len = (short int)atoi(lens);
+	printf("length is %d\n", (int)len);
+	char filebuf[len];
+	char *file = filebuf;
 	if (recv(sock, file, len, 0) < 0) {
 		fprintf(stderr, "server recv error\n");
 		return 1;
@@ -204,15 +205,42 @@ int DL(char *cmd, int sock) {
 	file[len - 1] = '\0';
 	
 	// Check if file exists
+	printf("file: |%s|...\n", file);
 	FILE *fp = fopen(file, "r");
-	if (!fp) {
+	int neg1 = htonl(-1);
+	if (!fp) { // if not, then send -1
 		if (send(sock, (char *)&neg1, sizeof(int), 0) < 0) {
 			fprintf(stderr, "server send error: %s\n", strerror(errno));
 			return 1;
 		}
 	}
-	else {
-		continue;
+	else { // otherwise, send size of file and md5, then sends file size and file
+		// size
+		fseek(fp, 0L, SEEK_END);
+		int sz = htonl(ftell(fp));
+		rewind(fp);
+		printf("before send\n");
+		if (send(sock, (char *)&sz, sizeof(int), 0) < 0) {
+			fprintf(stderr, "server send error: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		// md5
+		char md5sumbufcmd[4096];
+		char *md5sum_cmd = md5sumbufcmd;
+		strcpy(md5sum_cmd, "md5sum ");
+		strcat(md5sum_cmd, file);
+		FILE *in = popen(md5sum_cmd, "r");
+		char md5_buf[33];
+		char *md5 = md5_buf;
+		fgets(md5, sizeof(md5_buf), in);
+		md5[32] = '\0';
+		printf("md5sum from server: %s\n", md5);
+		if (send(sock, md5, 33, 0) < 0) {
+			fprintf(stderr, "server send error: %s\n", strerror(errno));
+			return 1;
+		}
+		
 	}
 	
 	return 0;
