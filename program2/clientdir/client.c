@@ -140,42 +140,10 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	/* **** HOW TO RECEIVE BACK FROM SERVER **** 
-	// receive
-	int n = 0;
-	int len = 0, maxlen = 100;
-	char buffer[maxlen];
-	char* pbuffer = buffer;
-
-	// will remain open until the server terminates the connection
-	while ((n = recv(sock, pbuffer, maxlen, 0)) > 0) {
-		pbuffer += n;
-		maxlen -= n;
-		len += n;
-
-		buffer[len] = '\0';
-		printf("client received: '%s'\n", buffer);
-	}
-	*/
-
 	// close the socket
 	close(sock);
 	return 0;
 }
-
-
-// ***************** SIMPLE POPEN EXAMPLE FOR REFERENCE ****************
-/*
-FILE *in = popen("ls -l | grep client | sort", "r");
-char output[4096];
-printf("output is:\n");
-while (fgets(output, sizeof(output), in) > 0) {
-	printf("%s",output);
-}
-*/
-
-
-
 
 
 int DL(char *cmd, int sock) {
@@ -461,11 +429,11 @@ int CD(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
-	printf("%s\n", dirName); ////////////////
+
 	if(send(sock, dirNameLen, strlen(dirNameLen), 0) < 0){
 		fprintf(stderr, "client send error: %d", strerror(errno));
 	}
-	printf("sent that mutha fucka\n");
+
 	char returnNum[BUFSIZ];
 	if(recv(sock, returnNum, BUFSIZ, 0) < 0){
 		fprintf(stderr, "client recv failed: %d", strerror(errno));
