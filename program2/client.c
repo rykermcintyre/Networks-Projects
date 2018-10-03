@@ -35,7 +35,7 @@ int main() {
 	
 	// ************ CHANGE THIS TO ACCEPT CMD LINE ARGS LATER ************
 	char* server_name = "student06.cse.nd.edu";
-	const int server_port = 41032;
+	const int server_port = 41023;
 
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
@@ -102,7 +102,6 @@ int main() {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got LS\n");
 		}
 		else if (strncmp(cmd, "MKDIR", 5) == 0) {
 			if (MKDIR(cmd, sock) != 0) {
@@ -123,7 +122,6 @@ int main() {
 				fprintf(stderr, "Client command failed\n");
 				return 1;
 			}
-			printf("Got CD\n");
 		}
 		else if (strncmp(cmd, "EXIT", 4) == 0) {
 			printf("Got EXIT\n");
@@ -178,29 +176,29 @@ while (fgets(output, sizeof(output), in) > 0) {
 
 int DL(char *cmd, int sock) {
 	// Send command to the server
-	char *dl = strtok(cmd, " ");
-	printf("dl: |%s|\n", dl);
-	if (send(sock, dl, strlen(dl), 0) < 0) {
-		printf("client send error\n");
-		return 1;
-	}
+	// char *dl = strtok(cmd, " ");
+	// printf("dl: |%s|\n", dl);
+	// if (send(sock, dl, strlen(dl), 0) < 0) {
+	// 	printf("client send error\n");
+	// 	return 1;
+	// }
 	
-	// break apart command
-	char *file = strtok(NULL, "\n");
-	printf("dl: |%s|\nfile name: |%s|\n", dl, file);
-	short int len = htons(strlen(file));
+	// // break apart command
+	// char *file = strtok(NULL, "\n");
+	// printf("dl: |%s|\nfile name: |%s|\n", dl, file);
+	// short int len = htons(strlen(file));
 	
-	// Send length of file name then file name
-	if (send(sock, (char *)&len, sizeof(short int), 0) < 0) {
-		fprintf(stderr, "client send error 1\n");
-		return 1;
-	}
-	printf("sent length of string: |%d|\n", (int)ntohs(len));
-	if (send(sock, file, len, 0) < 0) {
-		fprintf(stderr, "client send error\n");
-		return 1;
-	}
-	printf("sent string: |%s|\n", file);
+	// // Send length of file name then file name
+	// if (send(sock, (char *)&len, sizeof(short int), 0) < 0) {
+	// 	fprintf(stderr, "client send error 1\n");
+	// 	return 1;
+	// }
+	// printf("sent length of string: |%d|\n", (int)ntohs(len));
+	// if (send(sock, file, len, 0) < 0) {
+	// 	fprintf(stderr, "client send error\n");
+	// 	return 1;
+	// }
+	// printf("sent string: |%s|\n", file);
 	
 	
 	return 0;
@@ -230,14 +228,42 @@ int LS(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
+
+	char * buff;
+	recv(sock, buff, BUFSIZ, 0);
+	printf("%s\n", buff);
+
 	return 0;
 }
 
 
 int MKDIR(char *cmd, int sock) {
+	char *token = strtok(cmd, " ");
+    char * dirName = strtok(NULL, " ");
+    char dirNameLen[BUFSIZ];
+    short len = strlen(dirName);
+    len = htons(len);
+	sprintf(dirNameLen, "%d %s", len, dirName); // Read vars in buffer dirNamelen
 	if (send(sock, "MKDIR", strlen("MKDIR"), 0) < 0) {
 		printf("client send error\n");
 		return 1;
+	}
+	if(send(sock, dirNameLen, strlen(dirNameLen), 0) < 0){
+		fprintf(stderr, "client send error: %d", strerror(errno));
+	}
+	char returnNum[BUFSIZ];
+	if(recv(sock, returnNum, BUFSIZ, 0) < 0){
+		fprintf(stderr, "client recv failed: %d", strerror(errno));
+	}
+	int n = atoi(returnNum);
+	if(n == 1){
+		printf("The directory was successfully made\n");
+	}
+	else if(n == -1){
+		printf("Error in making directory\n");
+	}
+	else{
+		printf("The directory already exists on the server\n");
 	}
 	return 0;
 }
@@ -253,32 +279,35 @@ int RMDIR(char *cmd, int sock) {
 
 
 int CD(char *cmd, int sock) {
+	char *token = strtok(cmd, " ");
+    char * dirName = strtok(NULL, " ");
+    char dirNameLen[BUFSIZ];
+    short len = strlen(dirName);
+    len = htons(len);
+	sprintf(dirNameLen, "%d %s", len, dirName); // Read vars in buffer dirNamelen
 	if (send(sock, "CD", strlen("CD"), 0) < 0) {
 		printf("client send error\n");
 		return 1;
 	}
+	printf("%s\n", dirName); ////////////////
+	if(send(sock, dirNameLen, strlen(dirNameLen), 0) < 0){
+		fprintf(stderr, "client send error: %d", strerror(errno));
+	}
+	printf("sent that mutha fucka\n");
+	char returnNum[BUFSIZ];
+	if(recv(sock, returnNum, BUFSIZ, 0) < 0){
+		fprintf(stderr, "client recv failed: %d", strerror(errno));
+	}
+	int n = atoi(returnNum);
+	if(n == 1){
+		printf("Changed current directory\n");
+	}
+	else if(n == -1){
+		printf("Error in changing directory\n");
+	}
+	else{
+		printf("The directory does not exist on server\n");
+	}
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -20,6 +20,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 /**
  * TCP Uses 2 types of sockets, the connection socket and the listen socket.
@@ -38,7 +40,7 @@ int CD(char *, int);
 int main(int argc, char *argv[]) {
 	// port to start the server on
 	// ************* CHANGE TO ACCEPT CMD LINE ARG LATER **************
-	int SERVER_PORT = 41032;
+	int SERVER_PORT = 41023;
 
 	// socket address used for the server
 	struct sockaddr_in server_address;
@@ -83,8 +85,8 @@ int main(int argc, char *argv[]) {
 	// run indefinitely
 	while (true) {
 		// open a new socket to transmit data per connection
-		int sock;
-		if ((sock = accept(listen_sock, (struct sockaddr *)&client_address, &client_address_len)) < 0) {
+		int sock = accept(listen_sock, (struct sockaddr *)&client_address, &client_address_len);
+		if (sock < 0) {
 			printf("could not open a socket to accept data\n");
 			return 1;
 		}
@@ -97,7 +99,7 @@ int main(int argc, char *argv[]) {
 		printf("Connection established\n");
 
 		// keep running as long as the client keeps the connection open
-		while (1) {
+		while ((n = recv(sock, pbuffer, maxlen, 0)) > 0) {
 			// Don't know what the following three lines of code are for,
 			// but they mess it up I think.  Gonna leave them commented for now.
 			//pbuffer += n;
@@ -114,15 +116,15 @@ int main(int argc, char *argv[]) {
 				return 1;
 			}*/
 			
-			// REceive the command
-			memset(pbuffer, '\0', maxlen);
-			if ((n = recv(sock, pbuffer, maxlen, 0)) < 0) {
-				fprintf(stderr, "recv failed in the server: %s\n", strerror(errno));
-				return 1;
-			}
-			else if (n == 0) {
-				break; // client ended connection
-			}
+			// // REceive the command
+			// memset(pbuffer, '\0', maxlen);
+			// if ((n = recv(sock, pbuffer, maxlen, 0)) < 0) {
+			// 	fprintf(stderr, "recv failed in the server: %s\n", strerror(errno));
+			// 	return 1;
+			// }
+			// else if (n == 0) {
+			// 	break; // client ended connection
+			// }
 			
 			// All cases, call functions
 			if (strncmp(pbuffer, "DL", 2) == 0) {
@@ -150,7 +152,6 @@ int main(int argc, char *argv[]) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got LS\n");
 			}
 			else if (strncmp(pbuffer, "MKDIR", 5) == 0) {
 				if (MKDIR(pbuffer, sock) != 0) {
@@ -171,7 +172,6 @@ int main(int argc, char *argv[]) {
 					fprintf(stderr, "Server command handling failed\n");
 					return 1;
 				}
-				printf("Got CD\n");
 			}
 			else {
 				continue;
@@ -188,32 +188,32 @@ int main(int argc, char *argv[]) {
 
 int DL(char *cmd, int sock) {
 	
-	// Receive len of filename and filename
-	short int len;
-	if (recv(sock, (char *)&len, sizeof(short int), 0) < 0) {
-		fprintf(stderr, "server recv error\n");
-		return 1;
-	}
-	len = ntohs(len) + 1;
+	// // Receive len of filename and filename
+	// short int len;
+	// if (recv(sock, (char *)&len, sizeof(short int), 0) < 0) {
+	// 	fprintf(stderr, "server recv error\n");
+	// 	return 1;
+	// }
+	// len = ntohs(len) + 1;
 	
-	char file[len];
-	if (recv(sock, file, len, 0) < 0) {
-		fprintf(stderr, "server recv error\n");
-		return 1;
-	}
-	file[len - 1] = '\0';
+	// char file[len];
+	// if (recv(sock, file, len, 0) < 0) {
+	// 	fprintf(stderr, "server recv error\n");
+	// 	return 1;
+	// }
+	// file[len - 1] = '\0';
 	
-	// Check if file exists
-	FILE *fp = fopen(file, "r");
-	if (!fp) {
-		if (send(sock, (char *)&neg1, sizeof(int), 0) < 0) {
-			fprintf(stderr, "server send error: %s\n", strerror(errno));
-			return 1;
-		}
-	}
-	else {
-		continue;
-	}
+	// // Check if file exists
+	// FILE *fp = fopen(file, "r");
+	// if (!fp) {
+	// 	if (send(sock, (char *)&neg1, sizeof(int), 0) < 0) {
+	// 		fprintf(stderr, "server send error: %s\n", strerror(errno));
+	// 		return 1;
+	// 	}
+	// }
+	// else {
+	// 	continue;
+	// }
 	
 	return 0;
 }
@@ -230,11 +230,93 @@ int RM(char *cmd, int sock) {
 
 
 int LS(char *cmd, int sock) {
+	DIR *d;
+    struct dirent *dir;
+    d = opendir(".");
+    if (d)
+    {
+    	char buff1[BUFSIZ];
+    	char buff2[BUFSIZ];
+    	int size = 0;
+    	struct stat fileStat;
+
+        while ((dir = readdir(d)) != NULL)
+        {
+        	if (strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")!=0) {
+	            
+			    if(stat(dir->d_name,&fileStat) < 0)    
+			        return 1;
+
+			    size+=fileStat.st_size;
+
+			    // getting permmisions
+			    strcat(buff1, (S_ISDIR(fileStat.st_mode)) ? "d" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IRUSR) ? "r" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IWUSR) ? "w" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IXUSR) ? "x" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IRGRP) ? "r" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IWGRP) ? "w" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IXGRP) ? "x" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IROTH) ? "r" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IWOTH) ? "w" : "-");
+			    strcat(buff1, (fileStat.st_mode & S_IXOTH) ? "x " : "- ");
+
+	            strcat(buff1, dir->d_name);
+	            strcat(buff1, "\n");
+	            
+	        }
+        }
+
+        sprintf(buff2,"%d",size);
+        strcat(buff2,"\n");
+        strcat(buff2,buff1);
+        send(sock, buff2, sizeof(buff2), 0);
+        closedir(d);
+    }
+
 	return 0;
 }
 
 
 int MKDIR(char *cmd, int sock) {
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+
+	DIR *dir = opendir(dirName);
+	if (dir){
+		closedir(dir);
+		returnNum = "-2";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+		return 1;
+	}
+	else if (ENOENT == errno){
+	    /* Directory does not exist. */
+			mkdir(dirName, 0700);
+			returnNum = "1";
+			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				return 1;
+			}	
+	}
+	else{
+		fprintf(stderr, "opendir failed: %d\n", strerror(errno));
+		returnNum = "-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}	
+	}
+		
 	return 0;
 }
 
@@ -245,32 +327,39 @@ int RMDIR(char *cmd, int sock) {
 
 
 int CD(char *cmd, int sock) {
+
+	printf("in server CD func\n"); //////////////////
+
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+	printf("%s\n", dirName); ///////////////////
+	if (chdir(dirName) == 0) {
+		returnNum = "1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	} else if (errno==ENOENT) {
+		returnNum="-2";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	} else {
+		returnNum="-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+	}
+		
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
