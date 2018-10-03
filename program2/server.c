@@ -220,6 +220,7 @@ int MKDIR(char *cmd, int sock) {
 	char *token = strtok(dirNameLen, " ");
 	char *dirName = strtok(NULL, " ");
 	short int len = ntohs(atoi(token));
+	printf("len: %d", len);
 	dirName[len - 1] = '\0';
 	char *returnNum;	
 
@@ -256,6 +257,83 @@ int MKDIR(char *cmd, int sock) {
 
 
 int RMDIR(char *cmd, int sock) {
+	char dirNameLen[BUFSIZ];
+	if(recv(sock, dirNameLen, sizeof(dirNameLen), 0) < 0){
+		fprintf(stderr, "server recv error: %d\n", strerror(errno));
+	}
+	printf("damn damn %s hahaha\n", dirNameLen);
+	char *token = strtok(dirNameLen, " ");
+	char *dirName = strtok(NULL, " ");
+	short int len = ntohs(atoi(token));
+	printf("len: %d", len);
+	dirName[len - 1] = '\0';
+	char *returnNum;	
+
+	DIR *dir = opendir(dirName);
+	struct dirent *d;
+	int count = 0; //every "empty" directory contains only 2 things
+	if (dir){
+		while((d = readdir(dir)) != NULL){
+			if(++count > 2){
+				break;
+			}
+		}
+		if(count > 2){
+			returnNum = "-2";
+			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			}
+		}
+		returnNum = "1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}
+		char userAnswer[BUFSIZ];
+		if(recv(sock, userAnswer, BUFSIZ, 0) < 0){
+			fprintf(stderr, "Recv failed: %d\n", strerror(errno));
+			return 1;
+		}
+		if(strcmp(userAnswer, "Yes") == 0){
+			if(rmdir(dirName) < 0){
+				returnNum = "-1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				}
+			}
+			else{
+				returnNum = "1";
+				if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+					fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				}
+			}
+		}
+		else if(strcmp(userAnswer, "No") == 0){
+			printf("Delete abandoned by the user!\n");
+		}
+		else{
+			return 1;
+		}
+		
+		return 0;
+	}
+	else if (ENOENT == errno){
+	    /* Directory does not exist. */
+			returnNum = "-1";
+			if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+				fprintf(stderr, "Send failed: %d\n", strerror(errno));
+				return 1;
+			}	
+	}
+	else{
+		fprintf(stderr, "opendir failed: %d\n", strerror(errno));
+		returnNum = "-1";
+		if(send(sock, returnNum, strlen(returnNum), 0) < 0){
+			fprintf(stderr, "Send failed: %d\n", strerror(errno));
+			return 1;
+		}	
+	}
+		
 	return 0;
 }
 

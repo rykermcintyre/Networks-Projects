@@ -268,6 +268,52 @@ int RMDIR(char *cmd, int sock) {
 		printf("client send error\n");
 		return 1;
 	}
+    
+	char *token = strtok(cmd, " ");
+    char * dirName = strtok(NULL, " ");
+    char dirNameLen[BUFSIZ];
+    short len = strlen(dirName);
+    len = htons(len);
+	sprintf(dirNameLen, "%d %s", len, dirName); // Read vars in buffer dirNamelen
+	if (send(sock, "RMDIR", strlen("RMDIR"), 0) < 0) {
+		printf("client send error\n");
+		return 1;
+	}
+	if(send(sock, dirNameLen, strlen(dirNameLen), 0) < 0){
+		fprintf(stderr, "client send error: %d", strerror(errno));
+	}
+	char returnNum[BUFSIZ];
+	if(recv(sock, returnNum, BUFSIZ, 0) < 0){
+		fprintf(stderr, "client recv failed: %d", strerror(errno));
+	}
+	int n = atoi(returnNum);
+	if(n == -2){
+		printf("The directory is not empty\n");
+	}
+	else if(n == -1){
+		printf("The directory does not exist on server\n");
+	}
+	else if(n == 1){
+		printf("Are you sure you want to delete the directory? Reply Yes if sure, reply No to abandon the delete\n");
+		char confirm[10];
+		fgets(confirm, 10, stdin);
+		if(strcmp(confirm, "Yes") == 0){
+			if(send(sock, confirm, strlen(confirm), 0) < 0){
+				fprintf(stderr, "send failed: %d\n", strerror(errno));
+			}
+			char successNum[BUFSIZ];
+			if(recv(sock, successNum, BUFSIZ, 0) < 0){
+				fprintf(stderr, "recv failed: %d\n", strerror(errno));
+			}
+			n = atoi(successNum);
+			if(n >= 0){
+				printf("Directory deleted!\n");
+			}
+			else{
+				printf("Failed to delete directory\n");
+			}
+		}
+	}
 	return 0;
 }
 
