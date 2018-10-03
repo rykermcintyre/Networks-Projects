@@ -38,9 +38,13 @@ int CD(char *, int);
 
 
 int main(int argc, char *argv[]) {
-	// port to start the server on
-	// ************* CHANGE TO ACCEPT CMD LINE ARG LATER **************
-	int SERVER_PORT = 41038;
+	
+	if (argc!=2) {
+		printf("Enter valid arguments: ./myftpd [Port]\n");
+		exit(EXIT_FAILURE);
+	}
+
+	int SERVER_PORT = atoi(argv[1]);
 
 	// socket address used for the server
 	struct sockaddr_in server_address;
