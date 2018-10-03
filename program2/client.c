@@ -31,12 +31,15 @@ int MKDIR(char *, int);
 int RMDIR(char *, int);
 int CD(char *, int);
 
-int main() {
+int main(int argc, char *argv[]) {
 	
-	// ************ CHANGE THIS TO ACCEPT CMD LINE ARGS LATER ************
-	char* server_name = "student06.cse.nd.edu";
-	const int server_port = 41038;
-
+	if (argc!=3) {
+		printf("Enter valid arguments: ./myftp [Server_Name] [Port]\n");
+		exit(EXIT_FAILURE);
+	}
+	char* server_name = argv[1];
+	const int server_port = atoi(argv[2]);
+	
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
 	server_address.sin_family = AF_INET;
