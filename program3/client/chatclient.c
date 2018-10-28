@@ -14,18 +14,15 @@
 #include <pthread.h>
 #include "pg3lib.h"
 
-// ============== CHANGE THESE TO CMD LINE ARGS LATER ============
-#define SERVER_NAME "student06.cse.nd.edu"
-#define SERVER_PORT 41032
-
 int main(int argc, char *argv[]) {
 	
-	// Handle cmd line args ++++++++++++++ FIX THIS!!! +++++++++++++++
-	if (argc != 2) {
+	if (argc != 4) {
 		fprintf(stderr, "Usage: %s <server name> <port> <username>", argv[0]);
 		return 1;
 	}
-	char *username = argv[1];
+	char *username = argv[3];
+	int server_port = atoi(argv[2]);
+	char * server_name = argv[1];
 	
 	// Socket
 	struct sockaddr_in server_address;
@@ -33,11 +30,11 @@ int main(int argc, char *argv[]) {
 	server_address.sin_family = AF_INET;
 	
 	struct hostent *hp;
-	hp = (struct hostent *)gethostbyname(SERVER_NAME);
+	hp = (struct hostent *)gethostbyname(server_name);
 	bcopy(hp->h_addr, (char *)&server_address.sin_addr, hp->h_length);
 	
-	inet_pton(AF_INET, SERVER_NAME, &server_address.sin_addr);
-	server_address.sin_port = htons(SERVER_PORT);
+	inet_pton(AF_INET, server_name, &server_address.sin_addr);
+	server_address.sin_port = htons(server_port);
 	
 	// Create socket
 	int sock;
@@ -53,7 +50,7 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	
-	printf("Connecting to %s on port %d\n", SERVER_NAME, SERVER_PORT);
+	printf("Connecting to %s on port %d\n", server_name, server_port);
 	
 	// Send username
 	if (send(sock, username, strlen(username), 0) < 0) {
