@@ -120,6 +120,9 @@ void *handle_client(void *s) {
 	while (getline(&line_str, &line_buf_size, usersfile)) {
 		user = strtok(line, " ");
 		pass = strtok(NULL, "\n");
+		if(user == NULL){
+			break;
+		}
 		if (strcmp(user, username) == 0) {
 			found_user = 1;
 			break;

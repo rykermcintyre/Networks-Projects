@@ -74,10 +74,10 @@ int main(int argc, char *argv[]) {
 	// If user doesn't exist, prompt to create password
 	char *yes_string = "yes";
 	char *no_string = "no";
-	if (strcmp(existsbuf, yes_string) == 0) {
+	if (strcmp(existsbuf, no_string) == 0) {
 		printf("Creating New User\nEnter Password: ");
 	}
-	else if (strcmp(existsbuf, no_string) == 0) {
+	else if (strcmp(existsbuf, yes_string) == 0) {
 		printf("Enter Password: ");
 	}
 	else {
