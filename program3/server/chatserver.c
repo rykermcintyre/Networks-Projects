@@ -87,6 +87,8 @@ int main() {
 
 void *handle_client(void *s) {
 	int STATUS = 0;
+	char *yes_string = "yes";
+	char *no_string = "no";
 	
 	// Resolve socket number
 	int sock = *(int*)s;
@@ -157,8 +159,6 @@ void *handle_client(void *s) {
 	if (found_user) {
 		// Check if password is right
 		// Ack "yes" or "no". If "no", keep recving password until correct
-		char *yes_string = "yes";
-		char *no_string = "no";
 		while (strcmp(password, pass) != 0) {
 			memset(password, 0, sizeof(password));
 			if (send(sock, no_string, strlen(no_string), 0) < 0) {	
@@ -180,15 +180,49 @@ void *handle_client(void *s) {
 		}
 	}
 	else {
-		// TODO Append combo
+		// Build string and append that combo
+		char append_line[1024];
+		memset(append_line, 0, sizeof(append_line));
+		if (sprintf((char *)append_line, "%s %s\n", user, pass) < 0) {
+			fprintf(stderr, "Could not build \"user pass\" string: %s\n", strerror(errno));
+			STATUS = 1;
+			goto cleanup;
+		}
+		if (fwrite(append_line, 1, 1024, usersfile) < 0) {
+			fprintf(stderr, "Could not append user/pass combo to file: %s\n", strerror(errno));
+			STATUS = 1;
+			goto cleanup;
+		}
 		
-		
-		// TODO Ack "yes"
-		
+		// Ack "yes"
+		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
+			fprintf(stderr, "Server could not ack that user was added: %s\n", strerror(errno));
+			STATUS = 1;
+			goto cleanup;
+		}
 		
 	}
 	
-	// TODO DO CRYPTOGRAPHY THINGS NOW
+	// DO CRYPTOGRAPHY THINGS NOW
+	// Generate a public key
+	char *pubkey = getPubKey();
+	
+	// Get client's public key
+	char client_key[512];
+	memset(client_key, 0, sizeof(client_key));
+	if (recv(sock, (char *)client_key, sizeof(client_key), 0) < 0) {
+		fprintf(stderr, "Could not recv client key: %s\n", strerror(errno));
+		STATUS = 1;
+		goto cleanup;
+	}
+	
+	// Encrypt pubkey w/ client's key and send
+	char *encryptedkey = encrypt(pubkey, (char *)client_key);
+	if (send(sock, encryptedkey, strlen(encryptedkey), 0) < 0) {
+		fprintf(stderr, "Could not send encrypted key back to client: %s\n", strerror(errno));
+		STATUS = 1;
+		goto cleanup;
+	}
 	
 	
 	// Clean up
