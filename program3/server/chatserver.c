@@ -211,16 +211,17 @@ void *handle_client(void *s) {
 	char *pubkey = getPubKey();
 	
 	// Get client's public key
-	char client_key[512];
+	char client_key[4096];
 	memset(client_key, 0, sizeof(client_key));
 	if (recv(sock, (char *)client_key, sizeof(client_key), 0) < 0) {
 		fprintf(stderr, "Could not recv client key: %s\n", strerror(errno));
 		STATUS = 1;
 		goto cleanup;
 	}
+	printf("%s\n", client_key);
 	
 	// Encrypt pubkey w/ client's key and send
-	char *encryptedkey = encrypt(pubkey, (char *)client_key);
+	char *encryptedkey = encrypt(pubkey, client_key);
 	if (send(sock, encryptedkey, strlen(encryptedkey), 0) < 0) {
 		fprintf(stderr, "Could not send encrypted key back to client: %s\n", strerror(errno));
 		STATUS = 1;

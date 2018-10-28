@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
 		printf("Enter Password: ");
 	}
 	else {
-		fprintf(stderr, "Invalid received user acknowledgement\n");
+		fprintf(stderr, "Invalid received user acknowledgement: %s\n", existsbuf);
 		close(sock);
 		return 1;
 	}
@@ -92,6 +92,7 @@ int main(int argc, char *argv[]) {
 	while (strlen(password) < 1) {
 		fgets((char *)password, sizeof(password), stdin);
 	}
+	password[strlen(password) - 1] = '\0';
 	
 	// Send the password
 	if (send(sock, password, strlen(password), 0) < 0) {
@@ -102,6 +103,7 @@ int main(int argc, char *argv[]) {
 	
 	// Receive acknowledgement (password correct? yes/no. Always yes if new password)
 	char correct_password[10];
+	memset(correct_password, 0, sizeof(correct_password));
 	if (recv(sock, (char *)correct_password, sizeof(correct_password), 0) < 0) {
 		fprintf(stderr, "Could not receive password acknowledgement: %s\n", strerror(errno));
 		close(sock);
@@ -129,7 +131,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	if (strcmp(correct_password, yes_string) != 0) {
-		fprintf(stderr, "Invalid received password acknowledgement\n");
+		fprintf(stderr, "Invalid received password acknowledgement: %s\n", correct_password);
 		close(sock);
 		return 1;
 	}
