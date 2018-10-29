@@ -196,7 +196,6 @@ void *handle_client(void *s) {
 			STATUS = 1;
 			goto cleanup;
 		}
-		fclose(usersfile);	
 		// Ack "yes"
 		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
 			fprintf(stderr, "Server could not ack that user was added: %s\n", strerror(errno));
