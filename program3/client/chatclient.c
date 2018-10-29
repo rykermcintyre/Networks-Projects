@@ -115,6 +115,7 @@ int main(int argc, char *argv[]) {
 		while (strlen(password) < 1) {
 			fgets((char *)password, sizeof(password), stdin);
 		}
+		password[strlen(password) - 1] = '\0';
 		if (send(sock, password, strlen(password), 0) < 0) {
 			fprintf(stderr, "Client could not send password: %s\n", strerror(errno));
 			close(sock);

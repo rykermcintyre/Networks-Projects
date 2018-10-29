@@ -118,8 +118,11 @@ void *handle_client(void *s) {
 	memset(user_buf, 0, sizeof(user_buf));
 	memset(pass_buf, 0, sizeof(pass_buf));
 	while (getline(&line_str, &line_buf_size, usersfile)) {
+		memset(user_buf, 0, sizeof(user_buf));
+		memset(pass_buf, 0, sizeof(pass_buf));
 		user = strtok(line, " ");
 		pass = strtok(NULL, "\n");
+		memset(line, 0, sizeof(line));
 		if(user == NULL){
 			break;
 		}
@@ -127,9 +130,6 @@ void *handle_client(void *s) {
 			found_user = 1;
 			break;
 		}
-		memset(line, 0, sizeof(line));
-		memset(user_buf, 0, sizeof(user_buf));
-		memset(pass_buf, 0, sizeof(pass_buf));
 	}
 	
 	if (found_user) {
@@ -186,12 +186,12 @@ void *handle_client(void *s) {
 		// Build string and append that combo
 		char append_line[1024];
 		memset(append_line, 0, sizeof(append_line));
-		if (sprintf((char *)append_line, "%s %s\n", user, pass) < 0) {
+		if (sprintf((char *)append_line, "%s %s\n", username, password) < 0) {
 			fprintf(stderr, "Could not build \"user pass\" string: %s\n", strerror(errno));
 			STATUS = 1;
 			goto cleanup;
 		}
-		if (fwrite(append_line, 1, 1024, usersfile) < 0) {
+		if (fwrite((char *)append_line, 1, strlen(append_line), usersfile) < 0) {
 			fprintf(stderr, "Could not append user/pass combo to file: %s\n", strerror(errno));
 			STATUS = 1;
 			goto cleanup;
@@ -231,6 +231,7 @@ void *handle_client(void *s) {
 	
 	// Clean up
 cleanup:
+	fclose(usersfile);
 	close(sock);
 	pthread_exit(NULL);
 	exit(STATUS);
