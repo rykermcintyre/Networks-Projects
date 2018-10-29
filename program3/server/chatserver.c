@@ -24,7 +24,7 @@
 #include "pg3lib.h"
 
 // ============ CHANGE THIS TO CMD LINE ARGS LATER ============
-#define SERVER_PORT 41032
+#define SERVER_PORT 41036
 
 // Function primitives
 void *handle_client(void *);
@@ -131,7 +131,6 @@ void *handle_client(void *s) {
 			break;
 		}
 	}
-	
 	if (found_user) {
 		char *resp = "yes";
 		if (send(sock, resp, strlen(resp), 0) < 0) {
@@ -151,6 +150,7 @@ void *handle_client(void *s) {
 	
 	// Receive password
 	char password[512];
+	memset(password, 0, sizeof(password));
 	if (recv(sock, (char *)password, sizeof(password), 0) < 0) {
 		fprintf(stderr, "Could not receive password from client: %s\n", strerror(errno));
 		STATUS = 1;
@@ -191,12 +191,12 @@ void *handle_client(void *s) {
 			STATUS = 1;
 			goto cleanup;
 		}
-		if (fwrite((char *)append_line, 1, strlen(append_line), usersfile) < 0) {
+		if (fwrite(append_line, strlen(append_line), 1, usersfile) < 0) {
 			fprintf(stderr, "Could not append user/pass combo to file: %s\n", strerror(errno));
 			STATUS = 1;
 			goto cleanup;
 		}
-		
+		fclose(usersfile);	
 		// Ack "yes"
 		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
 			fprintf(stderr, "Server could not ack that user was added: %s\n", strerror(errno));
@@ -209,7 +209,7 @@ void *handle_client(void *s) {
 	// DO CRYPTOGRAPHY THINGS NOW
 	// Generate a public key
 	char *pubkey = getPubKey();
-	
+
 	// Get client's public key
 	char client_key[4096];
 	memset(client_key, 0, sizeof(client_key));
@@ -236,15 +236,6 @@ cleanup:
 	pthread_exit(NULL);
 	exit(STATUS);
 }
-
-
-
-
-
-
-
-
-
 
 
 
