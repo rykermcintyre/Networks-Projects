@@ -16,7 +16,7 @@
 
 // ============== CHANGE THESE TO CMD LINE ARGS LATER ============
 #define SERVER_NAME "student06.cse.nd.edu"
-#define SERVER_PORT 41032
+#define SERVER_PORT 41036
 
 int main(int argc, char *argv[]) {
 	
@@ -93,6 +93,7 @@ int main(int argc, char *argv[]) {
 		fgets((char *)password, sizeof(password), stdin);
 	}
 	
+	password[strlen(password) - 1] = '\0';
 	// Send the password
 	if (send(sock, password, strlen(password), 0) < 0) {
 		fprintf(stderr, "Client could not send password: %s\n", strerror(errno));
@@ -102,6 +103,7 @@ int main(int argc, char *argv[]) {
 	
 	// Receive acknowledgement (password correct? yes/no. Always yes if new password)
 	char correct_password[10];
+	memset(correct_password, 0, sizeof(correct_password));
 	if (recv(sock, (char *)correct_password, sizeof(correct_password), 0) < 0) {
 		fprintf(stderr, "Could not receive password acknowledgement: %s\n", strerror(errno));
 		close(sock);
@@ -116,6 +118,7 @@ int main(int argc, char *argv[]) {
 		while (strlen(password) < 1) {
 			fgets((char *)password, sizeof(password), stdin);
 		}
+		password[strlen(password) - 1] = '\0';
 		if (send(sock, password, strlen(password), 0) < 0) {
 			fprintf(stderr, "Client could not send password: %s\n", strerror(errno));
 			close(sock);
