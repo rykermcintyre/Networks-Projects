@@ -91,7 +91,6 @@ int main(int argc, char *argv[]) {
 	}
 	password[strlen(password) - 1] = '\0';
 	
-	password[strlen(password) - 1] = '\0';
 	// Send the password
 	if (send(sock, password, strlen(password), 0) < 0) {
 		fprintf(stderr, "Client could not send password: %s\n", strerror(errno));
