@@ -14,10 +14,12 @@
 #include <pthread.h>
 #include "pg3lib.h"
 
+void * handle_incoming_messages(void *s);
+
 int main(int argc, char *argv[]) {
 	
 	if (argc != 4) {
-		fprintf(stderr, "Usage: %s <server name> <port> <username>", argv[0]);
+		fprintf(stderr, "Usage: %s <server name> <port> <username>\n", argv[0]);
 		return 1;
 	}
 	char *username = argv[3];
@@ -154,13 +156,154 @@ int main(int argc, char *argv[]) {
 	char *hostkey = decrypt(encryptedkey);
 	
 	// Split threads
+	pthread_t pt;
+	int rc = pthread_create(&pt, NULL, handle_incoming_messages, (void *)&sock);
+	if(rc != 0){
+		fprintf(stderr, "Unable to create thread: %s\n", strerror(errno));
+		return 1;
+	}
+
 	// Main thread: Handle normal client ops
-	// Second thread: Handle incoming messages
+	
+	while(1){
+		char buffer[10];
+		char ack[10];
+		char msg[4096];
+		char confirm[10];
+		char userList[4096];
+		char username[512];
+		char *invalid_user = "inv";
+		char receiverPubKey[4096];
+		char encrypted_msg_buff[4096];
+		char *encrypted_msg = encrypted_msg_buff;
+		memset(encrypted_msg_buff, 0, sizeof(encrypted_msg_buff));
+		memset(receiverPubKey, 0, sizeof(receiverPubKey));
+		memset(username, 0, sizeof(username));
+		memset(userList, 0, sizeof(userList));
+		memset(confirm, 0, sizeof(confirm));
+		memset(buffer, 0, sizeof(buffer));
+		memset(ack, 0, sizeof(ack));
+		memset(msg, 0, sizeof(msg));	
+		printf("Please enter a command: P for public messages, D for direct messages, or Q to quit.\n");
+		printf(">>> ");
+		fgets((char *)buffer, sizeof(buffer), stdin);
+		if(send(sock, (char *)buffer, strlen(buffer), 0) < 0){
+			fprintf(stderr, "Unable to send command to server: %s\n", strerror(errno));
+			return 1;
+		}
+		if(recv(sock, (char *)ack, sizeof(ack), 0) < 0){
+			fprintf(stderr, "Unable to receive ack from server: %s\n", strerror(errno));
+			return 1;
+		}
+		if(strcmp(ack, yes_string) != 0){
+			fprintf(stderr, "Invalid acknowledgement received.\n");
+			return 1;
+		}
+		if(strcmp(buffer, "P") == 0){
+			printf("Enter message\n>>> ");
+			fgets((char *)msg, sizeof(msg), stdin);
+			msg[strlen(msg) - 1] = '\0';
+			if(send(sock, (char *)msg, strlen(msg), 0) < 0){
+				fprintf(stderr, "Unable to send message to server: %s\n", strerror(errno));
+				return 1;
+			}
+			if(recv(sock, (char *)confirm, sizeof(confirm), 0) < 0){
+				fprintf(stderr, "Unable to receive confirmation of sent message from server: %s\n", strerror(errno));
+				return 1;
+			}
+			if(strcmp(confirm, yes_string) != 0){
+				fprintf(stderr, "Invalid confirmation receieved\n");
+				return 1;
+			}
+		}	
+		else if(strcmp(buffer, "D") == 0){	
+			if(recv(sock, (char *)userList, sizeof(userList), 0) < 0){
+				fprintf(stderr, "Unable to receive list of users from server: %s\n", strerror(errno));
+				return 1;
+			}
+			printf("Users online:\n%s\n", userList);
+			printf("Which user would you like to talk to?\n");
+			printf(">>> ");
+			fgets((char *)username, sizeof(username), stdin);
+			username[strlen(username) - 1] = '\0';
+			if(send(sock, (char *)username, strlen(username), 0) < 0){
+				fprintf(stderr, "Unable to send username message to server: %s\n", strerror(errno));
+				return 1;
+			}
+			if(recv(sock, (char *)receiverPubKey, sizeof(receiverPubKey), 0) < 0){
+				fprintf(stderr, "Unable to receive public key of user from server: %s\n", strerror(errno));
+				return 1;
+			}
+			printf("Enter message\n>>> ");
+			fgets((char *)msg, sizeof(msg), stdin);
+			msg[strlen(msg) - 1] = '\0';
+	
+			encrypted_msg = encrypt((char *)msg, receiverPubKey);
+			if(send(sock, (char *)encrypted_msg, strlen(encrypted_msg), 0) < 0){
+				fprintf(stderr, "Unable to send message to server: %s\n", strerror(errno));
+				return 1;
+			}
+			if(recv(sock, (char *)confirm, sizeof(confirm), 0) < 0){
+				fprintf(stderr, "Unable to receive confirmation of sent message from server: %s\n", strerror(errno));
+				return 1;
+			}
+			if(strcmp(confirm, invalid_user) == 0){
+				printf("User doesn't exist/isn't online\n");
+			}
+			else if(strcmp(confirm, yes_string) != 0){
+				fprintf(stderr, "Invalid confirmation receieved\n");
+				return 1;
+			}
+		}
+		else{
+			close(sock);
+			return 0;
+		}
+	}
 	
 }
 
+// Second thread: Handle incoming messages
+void * handle_incoming_messages(void *s){
+	int STATUS = 0;
+	int sock = *(int*)s;
+	char message[4096];
+	memset(message, 0, sizeof(message));
+	char type_buff[10];
+	char sender_buff[512];
+	char output_buff[4096];
+	memset(type_buff, 0, sizeof(type_buff));
+	memset(sender_buff, 0, sizeof(sender_buff));
+	memset(output_buff, 0, sizeof(output_buff));
+	
+	char* type = type_buff;
+	char* sender = sender_buff;
+	char* output = output_buff;
 
-
+	while(1){
+		if(recv(sock, (char *)message, sizeof(message), 0) < 0){
+			fprintf(stderr, "Unable to receive from server: %s\n", strerror(errno));
+			exit(1);
+		}
+		
+		type = strtok(message, ":");
+		sender = strtok(NULL, ":");
+		output = strtok(NULL, "\n");
+		if(strcmp(type, "P") == 0){
+			printf("****Incoming Public message from %s****\n", sender);
+			printf("%s\n", output);
+		}
+		else{
+			printf("****Direct message from %s****\n", sender);
+			printf("%s\n", output);
+		}
+		printf(">>> ");
+		memset(type, 0, sizeof(type));
+		memset(sender, 0, sizeof(sender));
+		memset(output, 0, sizeof(output));
+		memset(message, 0, sizeof(message));
+	}
+}
 
 
 
