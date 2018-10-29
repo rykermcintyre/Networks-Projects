@@ -118,11 +118,11 @@ void *handle_client(void *s) {
 	memset(user_buf, 0, sizeof(user_buf));
 	memset(pass_buf, 0, sizeof(pass_buf));
 	while (getline(&line_str, &line_buf_size, usersfile)) {
-		memset(user_buf, 0, sizeof(user_buf));
-		memset(pass_buf, 0, sizeof(pass_buf));
+
+
 		user = strtok(line, " ");
 		pass = strtok(NULL, "\n");
-		memset(line, 0, sizeof(line));
+
 		if(user == NULL){
 			break;
 		}
@@ -130,6 +130,9 @@ void *handle_client(void *s) {
 			found_user = 1;
 			break;
 		}
+		memset(line, 0, sizeof(line));
+		memset(user_buf, 0, sizeof(user_buf));
+		memset(pass_buf, 0, sizeof(pass_buf));
 	}
 	if (found_user) {
 		char *resp = "yes";
@@ -218,7 +221,6 @@ void *handle_client(void *s) {
 		STATUS = 1;
 		goto cleanup;
 	}
-	printf("%s\n", client_key);
 	
 	// Encrypt pubkey w/ client's key and send
 	char *encryptedkey = encrypt(pubkey, client_key);
