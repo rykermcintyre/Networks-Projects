@@ -218,9 +218,10 @@ void *handle_client(void *s) {
 		STATUS = 1;
 		goto cleanup;
 	}
+	printf("%s\n", client_key);
 	
 	// Encrypt pubkey w/ client's key and send
-	char *encryptedkey = encrypt(pubkey, (char *)client_key);
+	char *encryptedkey = encrypt(pubkey, client_key);
 	if (send(sock, encryptedkey, strlen(encryptedkey), 0) < 0) {
 		fprintf(stderr, "Could not send encrypted key back to client: %s\n", strerror(errno));
 		STATUS = 1;
