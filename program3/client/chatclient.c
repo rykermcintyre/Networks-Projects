@@ -166,6 +166,7 @@ int main(int argc, char *argv[]) {
 	// Main thread: Handle normal client ops
 	
 	while(1){
+		// Initialize buffers, always reset each loop
 		char buffer[10];
 		char ack[10];
 		char msg[4096];
@@ -183,66 +184,107 @@ int main(int argc, char *argv[]) {
 		memset(confirm, 0, sizeof(confirm));
 		memset(buffer, 0, sizeof(buffer));
 		memset(ack, 0, sizeof(ack));
-		memset(msg, 0, sizeof(msg));	
+		memset(msg, 0, sizeof(msg));
+		
+		// Read input command
 		printf("Please enter a command: P for public messages, D for direct messages, or Q to quit.\n");
 		printf(">>> ");
 		fgets((char *)buffer, sizeof(buffer), stdin);
+		buffer[strlen(buffer) - 1] = '\0';
+		
+		// Make sure user enters proper command
+		while (strcmp((char *)buffer, "P") != 0 && strcmp((char *)buffer, "D") != 0 && strcmp((char *)buffer, "Q" != 0)) {
+			memset(buffer, 0, sizeof(buffer));
+			printf("Invalid command. Please enter P, D, or Q.\n>>> ");
+			fgets((char *)buffer, sizeof(buffer), stdin);
+			buffer[strlen(buffer) - 1] = '\0';
+		}
+		
+		// Send command
 		if(send(sock, (char *)buffer, strlen(buffer), 0) < 0){
 			fprintf(stderr, "Unable to send command to server: %s\n", strerror(errno));
 			return 1;
 		}
+		
+		// Recv ack that command was sent
 		if(recv(sock, (char *)ack, sizeof(ack), 0) < 0){
 			fprintf(stderr, "Unable to receive ack from server: %s\n", strerror(errno));
 			return 1;
 		}
+		
+		// Error if ack wasn't "yes"
 		if(strcmp(ack, yes_string) != 0){
 			fprintf(stderr, "Invalid acknowledgement received.\n");
 			return 1;
 		}
+		
+		// Command is P: Public message
 		if(strcmp(buffer, "P") == 0){
+			// Get message from user
 			printf("Enter message\n>>> ");
 			fgets((char *)msg, sizeof(msg), stdin);
 			msg[strlen(msg) - 1] = '\0';
+			
+			// Send message to server
 			if(send(sock, (char *)msg, strlen(msg), 0) < 0){
 				fprintf(stderr, "Unable to send message to server: %s\n", strerror(errno));
 				return 1;
 			}
+			
+			// Recv confirmation that message was recvd
 			if(recv(sock, (char *)confirm, sizeof(confirm), 0) < 0){
 				fprintf(stderr, "Unable to receive confirmation of sent message from server: %s\n", strerror(errno));
 				return 1;
 			}
+			
+			// If message was not "yes", error
 			if(strcmp(confirm, yes_string) != 0){
 				fprintf(stderr, "Invalid confirmation receieved\n");
 				return 1;
 			}
-		}	
-		else if(strcmp(buffer, "D") == 0){	
+		}
+		// Command is D: Direct message
+		else if(strcmp(buffer, "D") == 0){
+			// Get the user list from the server
 			if(recv(sock, (char *)userList, sizeof(userList), 0) < 0){
 				fprintf(stderr, "Unable to receive list of users from server: %s\n", strerror(errno));
 				return 1;
 			}
+			
+			// Print the list of users
 			printf("Users online:\n%s\n", userList);
 			printf("Which user would you like to talk to?\n");
 			printf(">>> ");
+			
+			// Read in the user the client would like to talk to
 			fgets((char *)username, sizeof(username), stdin);
 			username[strlen(username) - 1] = '\0';
+			
+			// Send this username to the server
 			if(send(sock, (char *)username, strlen(username), 0) < 0){
 				fprintf(stderr, "Unable to send username message to server: %s\n", strerror(errno));
 				return 1;
 			}
+			
+			// Receive the public key for that user
 			if(recv(sock, (char *)receiverPubKey, sizeof(receiverPubKey), 0) < 0){
 				fprintf(stderr, "Unable to receive public key of user from server: %s\n", strerror(errno));
 				return 1;
 			}
+			
+			// Read in message to be sent to that user
 			printf("Enter message\n>>> ");
 			fgets((char *)msg, sizeof(msg), stdin);
 			msg[strlen(msg) - 1] = '\0';
-	
+			
+			// Encrypt message and send to server
 			encrypted_msg = encrypt((char *)msg, receiverPubKey);
 			if(send(sock, (char *)encrypted_msg, strlen(encrypted_msg), 0) < 0){
 				fprintf(stderr, "Unable to send message to server: %s\n", strerror(errno));
 				return 1;
 			}
+			
+			// Receive confirmation that user is online ("yes" or "inv")
 			if(recv(sock, (char *)confirm, sizeof(confirm), 0) < 0){
 				fprintf(stderr, "Unable to receive confirmation of sent message from server: %s\n", strerror(errno));
 				return 1;
@@ -255,6 +297,7 @@ int main(int argc, char *argv[]) {
 				return 1;
 			}
 		}
+		// Command is Q: quit
 		else{
 			close(sock);
 			return 0;
@@ -285,7 +328,13 @@ void * handle_incoming_messages(void *s){
 			fprintf(stderr, "Unable to receive from server: %s\n", strerror(errno));
 			exit(1);
 		}
-		
+		if (message[0] != 'P' && message[0] != 'D') {
+			memset(type, 0, sizeof(type));
+			memset(sender, 0, sizeof(sender));
+			memset(output, 0, sizeof(output));
+			memset(message, 0, sizeof(message));
+			continue;
+		}
 		type = strtok(message, ":");
 		sender = strtok(NULL, ":");
 		output = strtok(NULL, "\n");
@@ -295,7 +344,11 @@ void * handle_incoming_messages(void *s){
 		}
 		else{
 			printf("****Direct message from %s****\n", sender);
-			printf("%s\n", output);
+			// TODO Create a struct to pass multiple args into this
+			// function, so that pubkey can be sent into this function
+			// and we can use it to decrypt direct messages
+			char *decrypted_output = decrypt(output, pubkey);
+			printf("%s\n", decrypted_output);
 		}
 		printf(">>> ");
 		memset(type, 0, sizeof(type));
