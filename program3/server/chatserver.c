@@ -218,7 +218,6 @@ void *handle_client(void *s) {
 		STATUS = 1;
 		goto cleanup;
 	}
-	printf("%s\n", client_key);
 	
 	// Encrypt pubkey w/ client's key and send
 	char *encryptedkey = encrypt(pubkey, client_key);
