@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
 		buffer[strlen(buffer) - 1] = '\0';
 		
 		// Make sure user enters proper command
-		while (strcmp((char *)buffer, "P") != 0 && strcmp((char *)buffer, "D") != 0 && strcmp((char *)buffer, "Q" != 0)) {
+		while (strcmp((char *)buffer, "P") != 0 && strcmp((char *)buffer, "D") != 0 && strcmp((char *)buffer, "Q") != 0){
 			memset(buffer, 0, sizeof(buffer));
 			printf("Invalid command. Please enter P, D, or Q.\n>>> ");
 			fgets((char *)buffer, sizeof(buffer), stdin);
@@ -206,18 +206,20 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 		
+		printf("Sent command\n");
+		
 		// Recv ack that command was sent
 		if(recv(sock, (char *)ack, sizeof(ack), 0) < 0){
 			fprintf(stderr, "Unable to receive ack from server: %s\n", strerror(errno));
 			return 1;
 		}
+		printf("received ack\n");
 		
 		// Error if ack wasn't "yes"
 		if(strcmp(ack, yes_string) != 0){
 			fprintf(stderr, "Invalid acknowledgement received.\n");
 			return 1;
 		}
-		
 		// Command is P: Public message
 		if(strcmp(buffer, "P") == 0){
 			// Get message from user
@@ -347,7 +349,7 @@ void * handle_incoming_messages(void *s){
 			// TODO Create a struct to pass multiple args into this
 			// function, so that pubkey can be sent into this function
 			// and we can use it to decrypt direct messages
-			char *decrypted_output = decrypt(output, pubkey);
+			char *decrypted_output = decrypt(output);
 			printf("%s\n", decrypted_output);
 		}
 		printf(">>> ");

@@ -24,7 +24,7 @@
 #include "pg3lib.h"
 
 // ============ CHANGE THIS TO CMD LINE ARGS LATER ============
-#define SERVER_PORT 41032
+#define SERVER_PORT 41036
 
 // Function primitives
 void *handle_client(void *);
@@ -255,24 +255,29 @@ void *handle_client(void *s) {
 		memset(userlist, 0, sizeof(userlist));
 		memset(message, 0, sizeof(message));
 		memset(command, 0, sizeof(command));
-		
+	
 		// Receive the command from the client
 		if (recv(sock, (char *)command, sizeof(command), 0) < 0) {
 			fprintf(stderr, "Unable to receive command from the client: %s\n", strerror(errno));
 			STATUS = 1;
 			goto cleanup;
 		}
-		
+		printf("Received the command\n");	
 		// Send ack that command was received
 		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
 			fprintf(stderr, "Unable to send ack that command was recvd: %s\n", strerror(errno));
 			STATUS = 1;
 			goto cleanup;
 		}
-		
+		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
+			fprintf(stderr, "Unable to send ack that command was recvd: %s\n", strerror(errno));
+			STATUS = 1;
+			goto cleanup;
+		}
 		// Split into cases for public message, direct message, or quit
 		// P: Public message
 		if (strcmp(command, "P") == 0) {
+			
 			// Receive message from user
 			if (recv(sock, (char *)message, sizeof(message), 0) < 0) {
 				fprintf(stderr, "Unable to receive P message from user: %s\n", strerror(errno));
@@ -286,12 +291,56 @@ void *handle_client(void *s) {
 				STATUS = 1;
 				goto cleanup;
 			}
+			if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
+				fprintf(stderr, "Unable to send ack that P message was received: %s\n", strerror(errno));
+				STATUS = 1;
+				goto cleanup;
+			}
 			
 			// TODO Loop through users in activeusers file and send
 			// message to each of them in format P:<username>:<message>
 			// as long as the user isn't the one sending the message
 			
+			// Open file descriptor for reading the active users file
+			activeusersfile = fopen("activeusers.txt", "r");
+			if(activeusersfile == NULL){
+				fprintf(stderr, "Unable to open activeusers.txt: %s\n", strerror(errno));
+			}
+			size_t len = 0;
+			char *line = NULL;
+			char *pubUsername = NULL;
+			char *pubSock = NULL;
+			char lineBuf[1024];
+			char pubTemp[1024];
+			char prefix [1024];
+			memset(pubTemp, 0, sizeof(pubTemp));
+			memset(prefix, 0, sizeof(prefix));
+			memset(lineBuf, 0, sizeof(lineBuf));
 			
+			// Read and send to each of the active users
+			while(getline(&line, &len, activeusersfile) != -1){
+				printf("%s\n", line);
+				strcpy(lineBuf, line);
+				pubUsername = strtok(lineBuf, ":");
+				pubSock = strtok(NULL, ":");
+				sprintf(prefix, "P:%s", username);
+				printf("pubUs: %s, sender of message: %s\n", pubUsername, username);
+				if(strcmp(pubUsername, username) != 0){
+					sprintf(pubTemp, "%s:%s", prefix, message);
+					if(send(atoi(pubSock), pubTemp, strlen(pubTemp), 0) < 0){
+						fprintf(stderr, "Unable to send ack that P message was received: %s\n", strerror(errno));
+						STATUS = 1;
+						fclose(activeusersfile);
+						goto cleanup;
+					}	
+				}
+				memset(pubTemp, 0, sizeof(pubTemp));
+				memset(prefix, 0, sizeof(prefix));
+				memset(lineBuf, 0, sizeof(lineBuf));
+			}
+			// Close file descriptor (will open again later for reading/writing, not appending)
+			fclose(activeusersfile);
+	
 		}
 		// D: Direct message
 		else if (strcmp(command, "D") == 0) {
@@ -338,7 +387,6 @@ void *handle_client(void *s) {
 			// If user is still active, send "yes"
 			// If user is no longer active, send "inv" and do a CONTINUE STATEMENT
 			
-			// TODO User is active, so send message to that user
 			if (send(receiver_sock, (char *)message, strlen(message), 0) < 0) {
 				fprintf(stderr, "Could not send D message to other user: %s\n", strerror(errno));
 				STATUS = 1;
