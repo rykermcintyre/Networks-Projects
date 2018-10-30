@@ -214,6 +214,7 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 		printf("received ack\n");
+		printf("ack: %s\n", ack);	
 		
 		// Error if ack wasn't "yes"
 		if(strcmp(ack, yes_string) != 0){
@@ -238,7 +239,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Unable to receive confirmation of sent message from server: %s\n", strerror(errno));
 				return 1;
 			}
-			
+
 			// If message was not "yes", error
 			if(strcmp(confirm, yes_string) != 0){
 				fprintf(stderr, "Invalid confirmation receieved\n");
@@ -341,11 +342,11 @@ void * handle_incoming_messages(void *s){
 		sender = strtok(NULL, ":");
 		output = strtok(NULL, "\n");
 		if(strcmp(type, "P") == 0){
-			printf("****Incoming Public message from %s****\n", sender);
+			printf("\n****Incoming Public message from %s****\n", sender);
 			printf("%s\n", output);
 		}
 		else{
-			printf("****Direct message from %s****\n", sender);
+			printf("\n****Direct message from %s****\n", sender);
 			// TODO Create a struct to pass multiple args into this
 			// function, so that pubkey can be sent into this function
 			// and we can use it to decrypt direct messages
@@ -353,6 +354,7 @@ void * handle_incoming_messages(void *s){
 			printf("%s\n", decrypted_output);
 		}
 		printf(">>> ");
+		fflush(stdout);
 		memset(type, 0, sizeof(type));
 		memset(sender, 0, sizeof(sender));
 		memset(output, 0, sizeof(output));

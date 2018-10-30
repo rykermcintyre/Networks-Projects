@@ -24,7 +24,7 @@
 #include "pg3lib.h"
 
 // ============ CHANGE THIS TO CMD LINE ARGS LATER ============
-#define SERVER_PORT 41036
+#define SERVER_PORT 41038
 
 // Function primitives
 void *handle_client(void *);
@@ -255,7 +255,8 @@ void *handle_client(void *s) {
 		memset(userlist, 0, sizeof(userlist));
 		memset(message, 0, sizeof(message));
 		memset(command, 0, sizeof(command));
-	
+		
+		char *inv_string = "inv";
 		// Receive the command from the client
 		if (recv(sock, (char *)command, sizeof(command), 0) < 0) {
 			fprintf(stderr, "Unable to receive command from the client: %s\n", strerror(errno));
@@ -319,12 +320,10 @@ void *handle_client(void *s) {
 			
 			// Read and send to each of the active users
 			while(getline(&line, &len, activeusersfile) != -1){
-				printf("%s\n", line);
 				strcpy(lineBuf, line);
 				pubUsername = strtok(lineBuf, ":");
 				pubSock = strtok(NULL, ":");
 				sprintf(prefix, "P:%s", username);
-				printf("pubUs: %s, sender of message: %s\n", pubUsername, username);
 				if(strcmp(pubUsername, username) != 0){
 					sprintf(pubTemp, "%s:%s", prefix, message);
 					if(send(atoi(pubSock), pubTemp, strlen(pubTemp), 0) < 0){
@@ -344,16 +343,38 @@ void *handle_client(void *s) {
 		}
 		// D: Direct message
 		else if (strcmp(command, "D") == 0) {
-			// TODO Loop through users in activeusers file and format
-			// the string userlist as "user1\nuser2\n..."
+			// Loop through users in activeusers file and format
+			// the string userlist as "  user1\n  user2\n..."
+			activeusersfile = fopen("activeusers.txt", "r");
+			char userline[8192];
+			char *userline_string = userline;
+			size_t userline_size = 8192;
+			memset(userline, 0, sizeof(userline));
 			
+			while (getline(&userline_string, &userline_size, activeusersfile) > 0) {
+				printf("%s\n", userline);
+				char *curr_user = strtok(userline_string, ":");
+				if (strcmp(curr_user, username) == 0) continue;
+				sprintf((char *)userlist, "  %s\n", curr_user);
+				printf("%s\n", curr_user);
+				memset(userline, 0, sizeof(userline));
+			}
+			
+			// Close active users file
+			fclose(activeusersfile);
+			printf("userlist: %s\n", userlist);	
 			// Send userlist to client
 			if (send(sock, (char *)userlist, strlen(userlist), 0) < 0) {
 				fprintf(stderr, "Could not send user list to client: %s\n", strerror(errno));
 				STATUS = 1;
 				goto cleanup;
 			}
-			
+			if (send(sock, (char *)userlist, strlen(userlist), 0) < 0) {
+				fprintf(stderr, "Could not send user list to client: %s\n", strerror(errno));
+				STATUS = 1;
+				goto cleanup;
+			}
+			printf("Sent\n");
 			// Receive username that client would like to talk to
 			if (recv(sock, (char *)selected_user, sizeof(selected_user), 0) < 0) {
 				fprintf(stderr, "Could not receive selected user from client: %s\n", strerror(errno));
@@ -361,12 +382,29 @@ void *handle_client(void *s) {
 				goto cleanup;
 			}
 			
-			// TODO Loop through users in activeusers file and extract
+			// Loop through users in activeusers file and extract
 			// the socket and the public key (receiverPubKey) for that user
-			// TODO Set the receiverPubKey and receiver sock fake things
-			// if user isn't in the file, but turn user_not_found to true
-			bool user_not_found = 0;
+			bool user_not_found = 1;
 			int receiver_sock;
+			
+			activeusersfile = fopen("activeusers.txt", "r");
+			
+			memset(userline, 0, sizeof(userline));
+			while (getline(&userline_string, &userline_size, activeusersfile)) {
+				char *curr_user = strtok(userline_string, ":");
+				char *curr_sock = strtok(NULL, ":");
+				char *curr_key = strtok(NULL, "\n");
+				receiver_sock = atoi(curr_sock);
+				sprintf(receiverPubKey, "%s", curr_key);
+				if (strcmp(curr_user, selected_user) == 0) {
+					user_not_found = 0;
+					break;
+				}
+				memset(userline, 0, sizeof(userline));
+			}
+			
+			fclose(activeusersfile);
+			
 			
 			// Send receiverPubKey to the client
 			if (send(sock, (char *)receiverPubKey, strlen(receiverPubKey), 0) < 0) {
@@ -382,12 +420,54 @@ void *handle_client(void *s) {
 				goto cleanup;
 			}
 			
-			// TODO If user_not_found, send "inv" and do a CONTINUE STATEMENT
+			// If user_not_found, send "inv" and do a CONTINUE STATEMENT
 			// Else if user IS found, double check user is still active
 			// If user is still active, send "yes"
 			// If user is no longer active, send "inv" and do a CONTINUE STATEMENT
+			if (user_not_found) {
+				if (send(sock, inv_string, strlen(inv_string), 0) < 0) {
+					fprintf(stderr, "Could not tell client that user is inv: %s\n", strerror(errno));
+					STATUS = 1;
+					goto cleanup;
+				}
+				continue;
+			}
+			else {
+				// Double check
+				activeusersfile = fopen("activeusers.txt", "r");
+				bool still_active = 0;
+				memset(userline, 0, sizeof(userline));
+				while (getline(&userline_string, &userline_size, activeusersfile)) {
+					char *curr_user = strtok(userline_string, ":");
+					if (strcmp(curr_user, selected_user) == 0) {
+						still_active = 1;
+						break;
+					}
+					memset(userline, 0, sizeof(userline));
+				}
+				fclose(activeusersfile);
+				if (still_active) {
+					if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
+						fprintf(stderr, "Could not tell client that user is online: %s\n", strerror(errno));
+						STATUS = 1;
+						goto cleanup;
+					}
+				}
+				else {
+					if (send(sock, inv_string, strlen(inv_string), 0) < 0) {
+						fprintf(stderr, "Could not tell client that user is inv (2): %s\n", strerror(errno));
+						STATUS = 1;
+						goto cleanup;
+					}
+					continue;
+				}
+			}
 			
-			if (send(receiver_sock, (char *)message, strlen(message), 0) < 0) {
+			// User is active, so build and send message to that user
+			char built_message[4096];
+			memset(built_message, 0, sizeof(built_message));
+			sprintf((char *)built_message, "D:%s:%s\n", username, message);
+			if (send(receiver_sock, (char *)built_message, strlen(built_message), 0) < 0) {
 				fprintf(stderr, "Could not send D message to other user: %s\n", strerror(errno));
 				STATUS = 1;
 				goto cleanup;
@@ -408,9 +488,26 @@ void *handle_client(void *s) {
 	
 	
 	// Clean up
-cleanup:
-	// TODO Add commands to delete user from the activeusers file
-	// if their name does, in fact, appear in the file
+cleanup: ;
+	char ln[4096];		
+	char* usr;
+	FILE *tmpactives = fopen("tmp.txt", "w");
+	activeusersfile = fopen("activeusers.txt", "r");
+	char temp[4096];			
+	while (fgets(ln,4096,activeusersfile)) {
+		strcpy(temp, ln);
+		usr = strtok(ln,":");
+
+		if (strcmp((char*)usr,username) != 0) {
+			fputs(temp,tmpactives);
+		}
+	}
+	fclose(activeusersfile);
+
+	remove("activeusers.txt");
+	rename("tmp.txt","activeusers.txt");
+
+	fclose(tmpactives);
 	fclose(usersfile);
 	close(sock);
 	pthread_exit(NULL);
