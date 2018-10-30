@@ -256,6 +256,8 @@ void *handle_client(void *s) {
 		memset(message, 0, sizeof(message));
 		memset(command, 0, sizeof(command));
 		
+		char *inv_string = "inv";
+		
 		// Receive the command from the client
 		if (recv(sock, (char *)command, sizeof(command), 0) < 0) {
 			fprintf(stderr, "Unable to receive command from the client: %s\n", strerror(errno));
@@ -295,8 +297,22 @@ void *handle_client(void *s) {
 		}
 		// D: Direct message
 		else if (strcmp(command, "D") == 0) {
-			// TODO Loop through users in activeusers file and format
-			// the string userlist as "user1\nuser2\n..."
+			// Loop through users in activeusers file and format
+			// the string userlist as "  user1\n  user2\n..."
+			activeusersfile = fopen("activeusers.txt", "r");
+			char userline[8192];
+			char *userline_string = userline;
+			size_t userline_size = 8192;
+			memset(userline, 0, sizeof(userline));
+			
+			while (getline(&userline_string, &userline_size, activeusersfile)) {
+				char *curr_user = strtok(userline_string, ":");
+				sprintf((char *)userlist, "  %s\n", curr_user);
+				memset(userline, 0, sizeof(userline));
+			}
+			
+			// Close active users file
+			fclose(activeusersfile);
 			
 			// Send userlist to client
 			if (send(sock, (char *)userlist, strlen(userlist), 0) < 0) {
@@ -312,12 +328,29 @@ void *handle_client(void *s) {
 				goto cleanup;
 			}
 			
-			// TODO Loop through users in activeusers file and extract
+			// Loop through users in activeusers file and extract
 			// the socket and the public key (receiverPubKey) for that user
-			// TODO Set the receiverPubKey and receiver sock fake things
-			// if user isn't in the file, but turn user_not_found to true
-			bool user_not_found = 0;
+			bool user_not_found = 1;
 			int receiver_sock;
+			
+			activeusersfile = fopen("activeusers.txt", "r");
+			
+			memset(userline, 0, sizeof(userline));
+			while (getline(&userline_string, &userline_size, activeusersfile)) {
+				char *curr_user = strtok(userline_string, ":");
+				char *curr_sock = strtok(NULL, ":");
+				char *curr_key = strtok(NULL, "\n");
+				receiver_sock = atoi(curr_sock);
+				sprintf(receiverPubKey, "%s", curr_key);
+				if (strcmp(curr_user, selected_user) == 0) {
+					user_not_found = 0;
+					break;
+				}
+				memset(userline, 0, sizeof(userline));
+			}
+			
+			fclose(activeusersfile);
+			
 			
 			// Send receiverPubKey to the client
 			if (send(sock, (char *)receiverPubKey, strlen(receiverPubKey), 0) < 0) {
@@ -333,13 +366,54 @@ void *handle_client(void *s) {
 				goto cleanup;
 			}
 			
-			// TODO If user_not_found, send "inv" and do a CONTINUE STATEMENT
+			// If user_not_found, send "inv" and do a CONTINUE STATEMENT
 			// Else if user IS found, double check user is still active
 			// If user is still active, send "yes"
 			// If user is no longer active, send "inv" and do a CONTINUE STATEMENT
+			if (user_not_found) {
+				if (send(sock, inv_string, strlen(inv_string), 0) < 0) {
+					fprintf(stderr, "Could not tell client that user is inv: %s\n", strerror(errno));
+					STATUS = 1;
+					goto cleanup;
+				}
+				continue;
+			}
+			else {
+				// Double check
+				activeusersfile = fopen("activeusers.txt", "r");
+				bool still_active = 0;
+				memset(userline, 0, sizeof(userline));
+				while (getline(&userline_string, &userline_size, activeusersfile)) {
+					char *curr_user = strtok(userline_string, ":");
+					if (strcmp(curr_user, selected_user) == 0) {
+						still_active = 1;
+						break;
+					}
+					memset(userline, 0, sizeof(userline));
+				}
+				fclose(activeusersfile);
+				if (still_active) {
+					if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
+						fprintf(stderr, "Could not tell client that user is online: %s\n", strerror(errno));
+						STATUS = 1;
+						goto cleanup;
+					}
+				}
+				else {
+					if (send(sock, inv_string, strlen(inv_string), 0) < 0) {
+						fprintf(stderr, "Could not tell client that user is inv (2): %s\n", strerror(errno));
+						STATUS = 1;
+						goto cleanup;
+					}
+					continue;
+				}
+			}
 			
-			// TODO User is active, so send message to that user
-			if (send(receiver_sock, (char *)message, strlen(message), 0) < 0) {
+			// User is active, so build and send message to that user
+			char built_message[4096];
+			memset(built_message, 0, sizeof(built_message));
+			sprintf((char *)built_message, "D:%s:%s\n", username, message);
+			if (send(receiver_sock, (char *)built_message, strlen(built_message), 0) < 0) {
 				fprintf(stderr, "Could not send D message to other user: %s\n", strerror(errno));
 				STATUS = 1;
 				goto cleanup;
