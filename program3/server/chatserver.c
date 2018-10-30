@@ -26,6 +26,12 @@
 // Function primitives
 void *handle_client(void *);
 
+// Double socket struct
+typedef struct {
+	int sock;
+	int message_sock;
+} socks;
+
 int main(int argc, char *argv[]) {
 	if (argc != 2) {
 		fprintf(stderr, "Usage: %s <port>\n", argv[0]);
@@ -76,8 +82,16 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 		
+		int message_sock;
+		if ((message_sock = accept(listen_sock, (struct sockaddr *)&client_address, &client_address_len)) < 0) {
+			fprintf(stderr, "Could not open a message socket for a client: %s\n", strerror(errno));
+			return 1;
+		}
+		
+		socks s = {sock, message_sock};
+		
 		// Create a thread to handle the client, loop to continue listening
-		int rc = pthread_create(&threads[sock-3], NULL, handle_client, (void *)&sock); // sock - 3 since sockets begin at 3
+		int rc = pthread_create(&threads[sock-3], NULL, handle_client, (void *)&s); // sock - 3 since sockets begin at 3
 		
 		if (rc != 0) {
 			fprintf(stderr, "Unable to create thread: %s\n", strerror(errno));
@@ -94,7 +108,8 @@ void *handle_client(void *s) {
 	char *no_string = "no";
 	
 	// Resolve socket number
-	int sock = *(int*)s;
+	int sock = ((socks *)s)->sock;
+	int message_sock = ((socks *)s)->message_sock;
 	
 	// Open file descriptor for reading and appending to users.txt file
 	FILE *usersfile = fopen("users.txt", "a+");
@@ -234,7 +249,7 @@ void *handle_client(void *s) {
 	
 	// Append user/socket to active users file
 	char add_active[8192];
-	sprintf((char *)add_active, "%s:%d:%s\n", username, sock, client_key);
+	sprintf((char *)add_active, "%s:%d:%d:%s\n", username, sock, message_sock, client_key);
 	if (fwrite(add_active, strlen(add_active), 1, activeusersfile) < 0) {
 		fprintf(stderr, "Could not append active user to file: %s\n", strerror(errno));
 		STATUS = 1;
@@ -266,18 +281,12 @@ void *handle_client(void *s) {
 			STATUS = 1;
 			goto cleanup;
 		}
-		printf("Received the command\n");	
 		// Send ack that command was received
 		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
 			fprintf(stderr, "Unable to send ack that command was recvd: %s\n", strerror(errno));
 			STATUS = 1;
 			goto cleanup;
 		}
-//		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
-//			fprintf(stderr, "Unable to send ack that command was recvd: %s\n", strerror(errno));
-//			STATUS = 1;
-//			goto cleanup;
-//		}
 		// Split into cases for public message, direct message, or quit
 		// P: Public message
 		if (strcmp(command, "P") == 0) {
@@ -295,13 +304,8 @@ void *handle_client(void *s) {
 				STATUS = 1;
 				goto cleanup;
 			}
-//			if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
-//				fprintf(stderr, "Unable to send ack that P message was received: %s\n", strerror(errno));
-//				STATUS = 1;
-//				goto cleanup;
-//			}
 			
-			// TODO Loop through users in activeusers file and send
+			// Loop through users in activeusers file and send
 			// message to each of them in format P:<username>:<message>
 			// as long as the user isn't the one sending the message
 			
@@ -325,6 +329,7 @@ void *handle_client(void *s) {
 			while(getline(&line, &len, activeusersfile) != -1){
 				strcpy(lineBuf, line);
 				pubUsername = strtok(lineBuf, ":");
+				char *firstsock = strtok(NULL, ":");
 				pubSock = strtok(NULL, ":");
 				sprintf(prefix, "P:%s", username);
 				if(strcmp(pubUsername, username) != 0){
@@ -339,6 +344,8 @@ void *handle_client(void *s) {
 				memset(pubTemp, 0, sizeof(pubTemp));
 				memset(prefix, 0, sizeof(prefix));
 				memset(lineBuf, 0, sizeof(lineBuf));
+				memset(pubSock, 0, sizeof(pubSock));
+				memset(pubUsername, 0, sizeof(pubUsername));
 			}
 			// Close file descriptor (will open again later for reading/writing, not appending)
 			fclose(activeusersfile);
@@ -353,31 +360,28 @@ void *handle_client(void *s) {
 			char *userline_string = userline;
 			size_t userline_size = 8192;
 			memset(userline, 0, sizeof(userline));
+			char *userlist_ptr = userlist;
 			
 			while (getline(&userline_string, &userline_size, activeusersfile) > 0) {
-				printf("%s\n", userline);
 				char *curr_user = strtok(userline_string, ":");
 				if (strcmp(curr_user, username) == 0) continue;
-				sprintf((char *)userlist, "  %s\n", curr_user);
-				printf("%s\n", curr_user);
+				sprintf(userlist_ptr, "  %s\n", curr_user);
+				userlist_ptr += (3 + strlen(curr_user));
 				memset(userline, 0, sizeof(userline));
 			}
 			
 			// Close active users file
 			fclose(activeusersfile);
-			printf("userlist: %s\n", userlist);	
 			// Send userlist to client
+			if (strlen(userlist) == 0) {
+				sprintf((char *)userlist, "X");
+			}
 			if (send(sock, (char *)userlist, strlen(userlist), 0) < 0) {
 				fprintf(stderr, "Could not send user list to client: %s\n", strerror(errno));
 				STATUS = 1;
 				goto cleanup;
 			}
-//			if (send(sock, (char *)userlist, strlen(userlist), 0) < 0) {
-//				fprintf(stderr, "Could not send user list to client: %s\n", strerror(errno));
-//				STATUS = 1;
-//				goto cleanup;
-//			}
-			printf("Sent\n");
+			if (strcmp(userlist, "X") == 0) continue;
 			// Receive username that client would like to talk to
 			if (recv(sock, (char *)selected_user, sizeof(selected_user), 0) < 0) {
 				fprintf(stderr, "Could not receive selected user from client: %s\n", strerror(errno));
@@ -391,29 +395,32 @@ void *handle_client(void *s) {
 			int receiver_sock;
 			
 			activeusersfile = fopen("activeusers.txt", "r");
-			printf("No seg\n");
 			
 			memset(userline, 0, sizeof(userline));
 			while (getline(&userline_string, &userline_size, activeusersfile)) {
-				printf("Loop\n");
 				char *curr_user = strtok(userline_string, ":");
+				if (curr_user == NULL) {
+					break;
+				}
+				char *first_sock = strtok(NULL, ":");
 				char *curr_sock = strtok(NULL, ":");
 				char *curr_key = strtok(NULL, "\n");
-				receiver_sock = atoi(curr_sock);
-				sprintf(receiverPubKey, "%s", curr_key);
-				if (strcmp(curr_user, selected_user) == 0) {
-					printf("Found\n");
+				if (curr_sock) receiver_sock = atoi(curr_sock);
+				if (curr_key) sprintf(receiverPubKey, "%s", curr_key);
+				if (curr_user && strcmp(curr_user, selected_user) == 0) {
 					user_not_found = 0;
 					break;
 				}
 				memset(userline, 0, sizeof(userline));
 			}
-			printf("No seg\n");
 			
 			fclose(activeusersfile);
 			
 			
 			// Send receiverPubKey to the client
+			if (strlen(receiverPubKey) < 10) {
+				sprintf(receiverPubKey, "%s", pubkey);
+			}
 			if (send(sock, (char *)receiverPubKey, strlen(receiverPubKey), 0) < 0) {
 				fprintf(stderr, "Could not send receiver's public key to client: %s\n", strerror(errno));
 				STATUS = 1;
@@ -446,7 +453,10 @@ void *handle_client(void *s) {
 				memset(userline, 0, sizeof(userline));
 				while (getline(&userline_string, &userline_size, activeusersfile)) {
 					char *curr_user = strtok(userline_string, ":");
-					if (strcmp(curr_user, selected_user) == 0) {
+					if (curr_user == NULL) {
+						break;
+					}
+					if (curr_user && strcmp(curr_user, selected_user) == 0) {
 						still_active = 1;
 						break;
 					}
@@ -517,6 +527,7 @@ cleanup: ;
 	fclose(tmpactives);
 	fclose(usersfile);
 	close(sock);
+	close(message_sock);
 	pthread_exit(NULL);
 	exit(STATUS);
 }
