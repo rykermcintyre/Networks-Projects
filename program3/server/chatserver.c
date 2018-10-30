@@ -438,20 +438,21 @@ cleanup: ;
 	char ln[256];		
 	char* usr;
 	FILE *tmpactives = fopen("tmp.txt", "w");
+	activeusersfile = fopen("activeusers.txt", "r");
 			
 	while (fgets(ln,256,activeusersfile)) {
-		usr = strtok(ln,";");
+		usr = strtok(ln,":");
 
 		if (strcmp((char*)usr,username) != 0) {
 			fputs(line,tmpactives);
 		}
 	}
+	fclose(activeusersfile);
 
 	remove("activeusers.txt");
 	rename("tmp.txt","activeusers.txt");
 
 	fclose(tmpactives);
-	fclose(activeusersfile);
 	fclose(usersfile);
 	close(sock);
 	pthread_exit(NULL);
