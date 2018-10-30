@@ -23,14 +23,17 @@
 #include <pthread.h>
 #include "pg3lib.h"
 
-// ============ CHANGE THIS TO CMD LINE ARGS LATER ============
-#define SERVER_PORT 41032
-
 // Function primitives
 void *handle_client(void *);
 
-int main() {
+int main(int argc, char *argv[]) {
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <port> <username>\n", argv[0];
+		return 1;
+	}
 	
+	int SERVER_PORT = atoi(argv[1]);
+			
 	// Socket for server
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(server_address));
