@@ -360,9 +360,24 @@ void *handle_client(void *s) {
 	
 	
 	// Clean up
-cleanup:
-	// TODO Add commands to delete user from the activeusers file
-	// if their name does, in fact, appear in the file
+cleanup: ;
+	char ln[256];		
+	char* usr;
+	FILE *tmpactives = fopen("tmp.txt", "w");
+			
+	while (fgets(ln,256,activeusersfile)) {
+		usr = strtok(ln,";");
+
+		if (strcmp((char*)usr,username) != 0) {
+			fputs(line,tmpactives);
+		}
+	}
+
+	remove("activeusers.txt");
+	rename("tmp.txt","activeusers.txt");
+
+	fclose(tmpactives);
+	fclose(activeusersfile);
 	fclose(usersfile);
 	close(sock);
 	pthread_exit(NULL);
