@@ -28,7 +28,7 @@ void *handle_client(void *);
 
 int main(int argc, char *argv[]) {
 	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <port> <username>\n", argv[0];
+		fprintf(stderr, "Usage: %s <port>\n", argv[0]);
 		return 1;
 	}
 	
