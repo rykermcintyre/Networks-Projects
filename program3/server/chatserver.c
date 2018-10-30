@@ -24,7 +24,6 @@
 #include "pg3lib.h"
 
 // ============ CHANGE THIS TO CMD LINE ARGS LATER ============
-#define SERVER_PORT 41038
 
 // Function primitives
 void *handle_client(void *);
@@ -276,11 +275,11 @@ void *handle_client(void *s) {
 			STATUS = 1;
 			goto cleanup;
 		}
-		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
-			fprintf(stderr, "Unable to send ack that command was recvd: %s\n", strerror(errno));
-			STATUS = 1;
-			goto cleanup;
-		}
+//		if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
+//			fprintf(stderr, "Unable to send ack that command was recvd: %s\n", strerror(errno));
+//			STATUS = 1;
+//			goto cleanup;
+//		}
 		// Split into cases for public message, direct message, or quit
 		// P: Public message
 		if (strcmp(command, "P") == 0) {
@@ -298,11 +297,11 @@ void *handle_client(void *s) {
 				STATUS = 1;
 				goto cleanup;
 			}
-			if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
-				fprintf(stderr, "Unable to send ack that P message was received: %s\n", strerror(errno));
-				STATUS = 1;
-				goto cleanup;
-			}
+//			if (send(sock, yes_string, strlen(yes_string), 0) < 0) {
+//				fprintf(stderr, "Unable to send ack that P message was received: %s\n", strerror(errno));
+//				STATUS = 1;
+//				goto cleanup;
+//			}
 			
 			// TODO Loop through users in activeusers file and send
 			// message to each of them in format P:<username>:<message>
@@ -375,11 +374,11 @@ void *handle_client(void *s) {
 				STATUS = 1;
 				goto cleanup;
 			}
-			if (send(sock, (char *)userlist, strlen(userlist), 0) < 0) {
-				fprintf(stderr, "Could not send user list to client: %s\n", strerror(errno));
-				STATUS = 1;
-				goto cleanup;
-			}
+//			if (send(sock, (char *)userlist, strlen(userlist), 0) < 0) {
+//				fprintf(stderr, "Could not send user list to client: %s\n", strerror(errno));
+//				STATUS = 1;
+//				goto cleanup;
+//			}
 			printf("Sent\n");
 			// Receive username that client would like to talk to
 			if (recv(sock, (char *)selected_user, sizeof(selected_user), 0) < 0) {
@@ -394,20 +393,24 @@ void *handle_client(void *s) {
 			int receiver_sock;
 			
 			activeusersfile = fopen("activeusers.txt", "r");
+			printf("No seg\n");
 			
 			memset(userline, 0, sizeof(userline));
 			while (getline(&userline_string, &userline_size, activeusersfile)) {
+				printf("Loop\n");
 				char *curr_user = strtok(userline_string, ":");
 				char *curr_sock = strtok(NULL, ":");
 				char *curr_key = strtok(NULL, "\n");
 				receiver_sock = atoi(curr_sock);
 				sprintf(receiverPubKey, "%s", curr_key);
 				if (strcmp(curr_user, selected_user) == 0) {
+					printf("Found\n");
 					user_not_found = 0;
 					break;
 				}
 				memset(userline, 0, sizeof(userline));
 			}
+			printf("No seg\n");
 			
 			fclose(activeusersfile);
 			

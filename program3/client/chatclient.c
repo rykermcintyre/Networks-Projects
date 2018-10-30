@@ -16,6 +16,8 @@
 
 void * handle_incoming_messages(void *s);
 
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
 int main(int argc, char *argv[]) {
 	
 	if (argc != 4) {
@@ -63,11 +65,13 @@ int main(int argc, char *argv[]) {
 	
 	// Receive if user exists
 	char existsbuf[10];
+
 	if (recv(sock, (char *)existsbuf, sizeof(existsbuf), 0) < 0) {
 		fprintf(stderr, "Client could not recv if user exists: %s\n", strerror(errno));
 		close(sock);
 		return 1;
 	}
+	pthread_mutex_unlock(&lock);
 	
 	// If user exists (yes) then prompt for password
 	// If user doesn't exist, prompt to create password
@@ -94,6 +98,7 @@ int main(int argc, char *argv[]) {
 	password[strlen(password) - 1] = '\0';
 	
 	// Send the password
+	pthread_mutex_lock(&lock);
 	if (send(sock, password, strlen(password), 0) < 0) {
 		fprintf(stderr, "Client could not send password: %s\n", strerror(errno));
 		close(sock);
@@ -108,6 +113,8 @@ int main(int argc, char *argv[]) {
 		close(sock);
 		return 1;
 	}
+	pthread_mutex_unlock(&lock);
+
 	
 	// If password is incorrect, reprompt user
 	while (strcmp(correct_password, no_string) == 0) {
@@ -200,6 +207,7 @@ int main(int argc, char *argv[]) {
 			buffer[strlen(buffer) - 1] = '\0';
 		}
 		
+		pthread_mutex_lock(&lock);
 		// Send command
 		if(send(sock, (char *)buffer, strlen(buffer), 0) < 0){
 			fprintf(stderr, "Unable to send command to server: %s\n", strerror(errno));
@@ -213,6 +221,7 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "Unable to receive ack from server: %s\n", strerror(errno));
 			return 1;
 		}
+		pthread_mutex_unlock(&lock);
 		printf("received ack\n");
 		printf("ack: %s\n", ack);	
 		
@@ -229,6 +238,7 @@ int main(int argc, char *argv[]) {
 			msg[strlen(msg) - 1] = '\0';
 			
 			// Send message to server
+			pthread_mutex_lock(&lock);
 			if(send(sock, (char *)msg, strlen(msg), 0) < 0){
 				fprintf(stderr, "Unable to send message to server: %s\n", strerror(errno));
 				return 1;
@@ -239,6 +249,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Unable to receive confirmation of sent message from server: %s\n", strerror(errno));
 				return 1;
 			}
+			pthread_mutex_unlock(&lock);
 
 			// If message was not "yes", error
 			if(strcmp(confirm, yes_string) != 0){
@@ -249,10 +260,12 @@ int main(int argc, char *argv[]) {
 		// Command is D: Direct message
 		else if(strcmp(buffer, "D") == 0){
 			// Get the user list from the server
+			pthread_mutex_lock(&lock);
 			if(recv(sock, (char *)userList, sizeof(userList), 0) < 0){
 				fprintf(stderr, "Unable to receive list of users from server: %s\n", strerror(errno));
 				return 1;
 			}
+			pthread_mutex_unlock(&lock);
 			
 			// Print the list of users
 			printf("Users online:\n%s\n", userList);
@@ -264,6 +277,7 @@ int main(int argc, char *argv[]) {
 			username[strlen(username) - 1] = '\0';
 			
 			// Send this username to the server
+			pthread_mutex_lock(&lock);
 			if(send(sock, (char *)username, strlen(username), 0) < 0){
 				fprintf(stderr, "Unable to send username message to server: %s\n", strerror(errno));
 				return 1;
@@ -274,6 +288,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Unable to receive public key of user from server: %s\n", strerror(errno));
 				return 1;
 			}
+			pthread_mutex_unlock(&lock);
 			
 			// Read in message to be sent to that user
 			printf("Enter message\n>>> ");
@@ -282,6 +297,7 @@ int main(int argc, char *argv[]) {
 			
 			// Encrypt message and send to server
 			encrypted_msg = encrypt((char *)msg, receiverPubKey);
+			pthread_mutex_lock(&lock);
 			if(send(sock, (char *)encrypted_msg, strlen(encrypted_msg), 0) < 0){
 				fprintf(stderr, "Unable to send message to server: %s\n", strerror(errno));
 				return 1;
@@ -292,6 +308,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Unable to receive confirmation of sent message from server: %s\n", strerror(errno));
 				return 1;
 			}
+			pthread_mutex_unlock(&lock);
 			if(strcmp(confirm, invalid_user) == 0){
 				printf("User doesn't exist/isn't online\n");
 			}
