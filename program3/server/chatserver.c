@@ -23,9 +23,6 @@
 #include <pthread.h>
 #include "pg3lib.h"
 
-// ============ CHANGE THIS TO CMD LINE ARGS LATER ============
-#define SERVER_PORT 41038
-
 // Function primitives
 void *handle_client(void *);
 
