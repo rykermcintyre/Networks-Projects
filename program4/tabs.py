@@ -1,24 +1,14 @@
 import sys
 
-if len(sys.argv) != 2 and len(sys.argv) != 3:
-	print("python tabs.py <input> [output]")
+if len(sys.argv) != 3:
+	print("python tabs.py <input> <output>")
 	exit(0)
 
-out = open(sys.argv[1], "r")
-out.close()
-
-if len(sys.argv) == 2:
-	in_name = sys.argv[1]
-	out = open(in_name, "w")
-elif len(sys.argv) == 3:
-	in_name = sys.argv[1]
-	out_name = sys.argv[2]
-	out = open(out_name, "w")
-else:
-	print("python tabs.py <input> [output]")
-	exit(0)
-
+in_name = sys.argv[1]
+out_name = sys.argv[2]
 f = open(in_name, "r")
+out = open(out_name, "w")
+
 linecount = 0
 tablen = 4
 
