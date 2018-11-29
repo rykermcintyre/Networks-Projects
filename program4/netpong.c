@@ -347,9 +347,7 @@ void *recv_state_host(void *args) {
 		char pos[4096];
 		memset(pos, 0, sizeof(pos));
 		int sz;
-		if ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len)) < 0) {
-			fprintf(stderr, "Unable to recv client paddle pos: %s\n", strerror(errno));
-			exit(1);
+		while ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len)) < 0) {
 		}
 		padRY = atoi(pos);
 	}
@@ -426,9 +424,7 @@ void *recv_state_client(void *args) {
 		char pos[4096];
 		memset(pos, 0, sizeof(pos));
 		int sz;
-		if ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&sin, (socklen_t *)&addr_len)) < 0) {
-			fprintf(stderr, "Unable to recv host paddle pos: %s\n", strerror(errno));
-			exit(1);
+		while ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&sin, (socklen_t *)&addr_len)) < 0) {
 		}
 		padLY = atoi(pos);
 	}
