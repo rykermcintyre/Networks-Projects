@@ -290,7 +290,11 @@ void *host(void *args) {
 	// Determine addr len
 	addr_len = sizeof(client_addr);
 	
+	recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len);
 	
+	FILE *fp;
+	fp = fopen("log.txt", "a");
+	fwrite(buf, sizeof(buf), 1, fp);
 	
 	
 	
@@ -336,8 +340,8 @@ void *client(void *args) {
 	// addr len
 	addr_len = sizeof(sin);
 	
-	
-	
+	char buf[4096] = "Hello";
+	sendto(s, buf, strlen(buf), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr));
 	
 	
 	
