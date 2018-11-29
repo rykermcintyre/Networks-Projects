@@ -18,9 +18,6 @@
 #define PADLX 1
 #define PADRX WIDTH - 2
 
-// Log file
-FILE *log = fopen("log.txt", "a");
-
 // Global variables recording the state of the game
 // Position of ball
 int ballX, ballY;
@@ -206,6 +203,9 @@ void initNcurses() {
 }
 
 int main(int argc, char *argv[]) {
+	// Log file
+	FILE *logfile = fopen("log.txt", "a");
+
 	// Process args
 	// refresh is clock rate in microseconds
 	// This corresponds to the movement speed of the ball
@@ -256,13 +256,13 @@ int main(int argc, char *argv[]) {
 		
 		// Open socket
 		if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
-			fprintf(log, "Socket failed\n");
+			fprintf(logfile, "Socket failed\n");
 			exit(1);
 		}
 		
 		// Bind
 		if ((bind(s, (struct sockaddr *)&sin, sizeof(sin))) < 0) {
-			fprintf(log, "Bind failed\n");
+			fprintf(logfile, "Bind failed\n");
 			exit(1);
 		}
 		sock_sin var2 = {s, client_addr};
@@ -327,6 +327,9 @@ int main(int argc, char *argv[]) {
 
 
 void *send_state_host(void *args) {
+	// Log file
+	FILE *logfile = fopen("log.txt", "a");
+
 	struct sockaddr_in client_addr = ((sock_sin *)args)->sin;
 	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(client_addr);
@@ -335,7 +338,7 @@ void *send_state_host(void *args) {
 		memset(pos, 0, sizeof(pos));
 		sprintf(pos, "%d", padLY);
 		if (sendto(s, pos, strlen(pos), 0, (struct sockaddr *)&client_addr, sizeof(struct sockaddr)) < 0) {
-			fprintf(log, "Could not send host paddle pos: %s\n", strerror(errno));
+			fprintf(logfile, "Could not send host paddle pos: %s\n", strerror(errno));
 			exit(1);
 		}
 		usleep(1000);
@@ -343,6 +346,9 @@ void *send_state_host(void *args) {
 }
 
 void *recv_state_host(void *args) {
+	// Log file
+	FILE *logfile = fopen("log.txt", "a");
+
 	struct sockaddr_in client_addr = ((sock_sin *)args)->sin;
 	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(client_addr);
@@ -358,6 +364,9 @@ void *recv_state_host(void *args) {
 
 // Host code
 void *host(void *args) {
+	// Log file
+	FILE *logfile = fopen("log.txt", "a");
+
 	// Resolve things from args
 	struct sockaddr_in client_addr = ((sock_sin *)args)->sin;
 	int s = ((sock_sin *)args)->s;
@@ -392,7 +401,7 @@ void *host(void *args) {
 	recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len);
 	
 	FILE *fp;
-	fp = fopen("log.txt", "a");
+	fp = fopen("logfile.txt", "a");
 	fwrite(buf, sizeof(buf), 1, fp);
 	*/
 	
@@ -404,6 +413,9 @@ void *host(void *args) {
 }
 
 void *send_state_client(void *args) {
+	// Log file
+	FILE *logfile = fopen("log.txt", "a");
+
 	struct sockaddr_in sin = ((sock_sin *)args)->sin;
 	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(sin);
@@ -412,7 +424,7 @@ void *send_state_client(void *args) {
 		memset(pos, 0, sizeof(pos));
 		sprintf(pos, "%d", padRY);
 		if (sendto(s, pos, strlen(pos), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr)) < 0) {
-			fprintf(log, "Could not send client paddle pos: %s\n", strerror(errno));
+			fprintf(logfile, "Could not send client paddle pos: %s\n", strerror(errno));
 			exit(1);
 		}
 		usleep(1000);
@@ -420,6 +432,9 @@ void *send_state_client(void *args) {
 }
 
 void *recv_state_client(void *args) {
+	// Log file
+	FILE *logfile = fopen("log.txt", "a");
+
 	struct sockaddr_in sin = ((sock_sin *)args)->sin;
 	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(sin);
@@ -435,6 +450,9 @@ void *recv_state_client(void *args) {
 
 // Client code
 void *client(void *args) {
+	// Log file
+	FILE *logfile = fopen("log.txt", "a");
+
 	// Determine port and host name from args
 	int PORT = ((info *)args)->port;
 	char *HOST = ((info *)args)->host;
@@ -447,7 +465,7 @@ void *client(void *args) {
 	// Translate host name
 	hp = gethostbyname(HOST);
 	if (!hp) {
-		fprintf(log, "Unknown host\n");
+		fprintf(logfile, "Unknown host\n");
 		exit(1);
 	}
 	
@@ -459,7 +477,7 @@ void *client(void *args) {
 	
 	// Open the socket
 	if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
-		fprintf(log, "Socket failed\n");
+		fprintf(logfile, "Socket failed\n");
 		exit(1);
 	}
 	
@@ -469,7 +487,7 @@ void *client(void *args) {
 	// Tell host client is ready
 	char ready[4096] = "ready\0";
 	if (sendto(s, ready, strlen(ready), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr)) < 0) {
-		fprintf(log, "Could not send ready msg: %s\n", strerror(errno));
+		fprintf(logfile, "Could not send ready msg: %s\n", strerror(errno));
 		exit(1);
 	}
 	
