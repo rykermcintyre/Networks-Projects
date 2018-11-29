@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <errno.h>
 
 #define WIDTH 43
 #define HEIGHT 21
@@ -234,11 +235,43 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	
+	// Separate threads for host or client
 	info var = {PORT, HOST};
 	
 	if (isHost) {
+		printf("Waiting for challenger\n");
+		// Declare variables
+		struct sockaddr_in sin, client_addr;
+		char buf[4096];
+		int s, addr_len;
+		
+		// Build addr data struct
+		bzero((char*)&sin, sizeof(sin));
+		sin.sin_family = AF_INET;
+		sin.sin_addr.s_addr = INADDR_ANY;
+		sin.sin_port = htons(PORT);
+		
+		// Open socket
+		if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
+			fprintf(stderr, "Socket failed\n");
+			exit(1);
+		}
+		
+		// Bind
+		if ((bind(s, (struct sockaddr *)&sin, sizeof(sin))) < 0) {
+			fprintf(stderr, "Bind failed\n");
+			exit(1);
+		}
+		sock_sin var2 = {s, client_addr};
+		while (1) {
+			char ready[4096];
+			int sz;
+			if ((sz = recvfrom(s, ready, sizeof(ready), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len)) != -1) {
+				break;
+			}
+		}
 		pthread_t host_thread;
-		pthread_create(&host_thread, NULL, host, (void *)&var);
+		pthread_create(&host_thread, NULL, host, (void *)&var2);
 	}
 	else {
 		pthread_t client_thread;
@@ -250,7 +283,6 @@ int main(int argc, char *argv[]) {
 
 	// Set starting game state and display a countdown
 	reset();
-	countdown("Starting Game");
 
 	// Listen to keyboard input in a background thread
 	pthread_t pth;
@@ -260,6 +292,8 @@ int main(int argc, char *argv[]) {
 	else {
 		pthread_create(&pth, NULL, listenInputClient, NULL);
 	}
+	
+	countdown("Starting Game");
 
 	// Main game loop executes tock() method every REFRESH microseconds
 	struct timeval tv;
@@ -290,15 +324,15 @@ int main(int argc, char *argv[]) {
 
 
 void *send_state_host(void *args) {
-	struct sockaddr_in client_addr = ((sock_sin *)&args)->sin;
-	int s = ((sock_sin *)&args)->s;
+	struct sockaddr_in client_addr = ((sock_sin *)args)->sin;
+	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(client_addr);
 	while (1) {
 		char pos[4096];
 		memset(pos, 0, sizeof(pos));
 		sprintf(pos, "%d", padLY);
 		if (sendto(s, pos, strlen(pos), 0, (struct sockaddr *)&client_addr, sizeof(struct sockaddr)) < 0) {
-			fprintf(stderr, "Could not send host paddle pos\n");
+			fprintf(stderr, "Could not send host paddle pos: %s\n", strerror(errno));
 			exit(1);
 		}
 		usleep(1000);
@@ -306,15 +340,15 @@ void *send_state_host(void *args) {
 }
 
 void *recv_state_host(void *args) {
-	struct sockaddr_in client_addr = ((sock_sin *)&args)->sin;
-	int s = ((sock_sin *)&args)->s;
+	struct sockaddr_in client_addr = ((sock_sin *)args)->sin;
+	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(client_addr);
 	while (1) {
 		char pos[4096];
 		memset(pos, 0, sizeof(pos));
 		int sz;
 		if ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len)) < 0) {
-			fprintf(stderr, "Unable to recv client paddle pos\n");
+			fprintf(stderr, "Unable to recv client paddle pos: %s\n", strerror(errno));
 			exit(1);
 		}
 		padRY = atoi(pos);
@@ -323,35 +357,26 @@ void *recv_state_host(void *args) {
 
 // Host code
 void *host(void *args) {
-	
-	// Determine port from args
-	int PORT = ((info *)args)->port;
-	
-	// Declare variables
-	struct sockaddr_in sin, client_addr;
-	char buf[4096];
-	int s, addr_len;
-	
-	// Build addr data struct
-	bzero((char*)&sin, sizeof(sin));
-	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = INADDR_ANY;
-	sin.sin_port = htons(PORT);
-	
-	// Open socket
-	if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
-		fprintf(stderr, "Socket failed\n");
-		exit(1);
-	}
-	
-	// Bind
-	if ((bind(s, (struct sockaddr *)&sin, sizeof(sin))) < 0) {
-		fprintf(stderr, "Bind failed\n");
-		exit(1);
-	}
+	// Resolve things from args
+	struct sockaddr_in client_addr = ((sock_sin *)args)->sin;
+	int s = ((sock_sin *)args)->s;
 	
 	// Determine addr len
-	addr_len = sizeof(client_addr);
+	int addr_len = sizeof(client_addr);
+	
+	// Wait for client to connect
+	/*while (1) {
+		char cd[4096];
+		memset(cd, 0, sizeof(cd));
+		sprintf(cd, "Waiting for a challenger on port %d", PORT);
+		countdown(cd);
+		char ready[4096];
+		int sz;
+		if ((sz = recvfrom(s, ready, sizeof(ready), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len)) != -1) {
+			break;
+		}
+		usleep(3000000);
+	}*/
 	
 	// Set up threads to send and receive stats constantly
 	sock_sin q = {s, client_addr};
@@ -361,10 +386,6 @@ void *host(void *args) {
 	
 	pthread_t recv_state;
 	pthread_create(&recv_state, NULL, recv_state_host, (void *)&q);
-	
-	
-	
-	
 	
 	/*
 	recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len);
@@ -382,15 +403,15 @@ void *host(void *args) {
 }
 
 void *send_state_client(void *args) {
-	struct sockaddr_in sin = ((sock_sin *)&args)->sin;
-	int s = ((sock_sin *)&args)->s;
+	struct sockaddr_in sin = ((sock_sin *)args)->sin;
+	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(sin);
 	while (1) {
 		char pos[4096];
 		memset(pos, 0, sizeof(pos));
 		sprintf(pos, "%d", padRY);
 		if (sendto(s, pos, strlen(pos), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr)) < 0) {
-			fprintf(stderr, "Could not send client paddle pos\n");
+			fprintf(stderr, "Could not send client paddle pos: %s\n", strerror(errno));
 			exit(1);
 		}
 		usleep(1000);
@@ -398,15 +419,15 @@ void *send_state_client(void *args) {
 }
 
 void *recv_state_client(void *args) {
-	struct sockaddr_in sin = ((sock_sin *)&args)->sin;
-	int s = ((sock_sin *)&args)->s;
+	struct sockaddr_in sin = ((sock_sin *)args)->sin;
+	int s = ((sock_sin *)args)->s;
 	int addr_len = sizeof(sin);
 	while (1) {
 		char pos[4096];
 		memset(pos, 0, sizeof(pos));
 		int sz;
 		if ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&sin, (socklen_t *)&addr_len)) < 0) {
-			fprintf(stderr, "Unable to recv host paddle pos\n");
+			fprintf(stderr, "Unable to recv host paddle pos: %s\n", strerror(errno));
 			exit(1);
 		}
 		padLY = atoi(pos);
@@ -445,6 +466,13 @@ void *client(void *args) {
 	
 	// addr len
 	addr_len = sizeof(sin);
+	
+	// Tell host client is ready
+	char ready[4096] = "ready\0";
+	if (sendto(s, ready, strlen(ready), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr)) < 0) {
+		fprintf(stderr, "Could not send ready msg: %s\n", strerror(errno));
+		exit(1);
+	}
 	
 	// Set up threads to send and receive stats constantly
 	sock_sin q = {s, sin};
