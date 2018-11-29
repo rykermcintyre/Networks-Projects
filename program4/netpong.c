@@ -23,6 +23,16 @@ int scoreL, scoreR;
 // ncurses window
 WINDOW *win;
 
+// Function primitives
+void *host(void *);
+void *client(void *);
+
+// Struct typedefs
+typedef struct {
+	int port;
+	char *host;
+} info;
+
 /* Draw the current game state to the screen
  * ballX: X position of the ball
  * ballY: Y position of the ball
@@ -183,6 +193,7 @@ int main(int argc, char *argv[]) {
 		if (strcmp(argv[1],"--host")==0) {
 			isHost=true;
 			port=atoi(argv[2]);
+			host = "None";
 			difficulty=argv[3];
 			if(strcmp(difficulty, "easy") == 0) refresh = 80000;
 			else if(strcmp(difficulty, "medium") == 0) refresh = 40000;
@@ -201,7 +212,18 @@ int main(int argc, char *argv[]) {
 		printf("Usage: \n./netpong --host PORT DIFFICULTY\n**or**\n./netpong HOSTNAME PORT\n");
 		exit(0);
 	}
-
+	
+	info var = {port, host};
+	
+	if (isHost) {
+		pthread_t host;
+		pthread_create(&host, NULL, host, (void *)&var);
+	}
+	else {
+		pthread_t client;
+		pthread_create(&client, NULL, client, (void *)&var);
+	}
+	
 	// Set up ncurses environment
 	initNcurses();
 
@@ -233,3 +255,117 @@ int main(int argc, char *argv[]) {
 	endwin();
 	return 0;
 }
+
+
+
+// Host code
+void *host(void *args) {
+	
+	// Determine port from args
+	int PORT = ((info *)args)->port;
+	
+	// Declare variables
+	struct sockaddr_in sin, client_addr;
+	char buf[4096];
+	int s, addr_len;
+	
+	// Build addr data struct
+	bzero((char*)&sin, sizeof(sin));
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = INADDR_ANY;
+	sin.sin_port = htons(PORT);
+	
+	// Open socket
+	if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
+		fprintf(stderr, "Socket failed\n");
+		exit(1);
+	}
+	
+	// Bind
+	if ((bind(s, (struct sockaddr *)&sin, sizeof(sin))) < 0) {
+		fprintf(stderr, "Bind failed\n");
+		exit(1);
+	}
+	
+	// Determine addr len
+	addr_len = sizeof(client_addr);
+	
+	
+	
+	
+	
+	
+	
+	// Close socket
+	close(s);
+}
+
+
+
+
+// Client code
+void *client(void *args) {
+	// Determine port and host name from args
+	int PORT = ((info *)args)->port;
+	char *HOST = ((info *)args)->host;
+	
+	// Declare variables
+	struct hostent *hp;
+	struct sockaddr_in sin;
+	int s, len, addr_len;
+	
+	// Translate host name
+	hp = gethostbyname(HOST);
+	if (!hp) {
+		fprintf(stderr, "Unknown host\n");
+		exit(1);
+	}
+	
+	// Build address data struct
+	bzero((char*)&sin, sizeof(sin));
+	sin.sin_family = AF_INET;
+	bcopy(hp->h_addr, (char *)&sin.sin_addr, hp->h_length);
+	sin.sin_port = htons(SERVER_PORT);
+	
+	// Open the socket
+	if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
+		fprintf(stderr, "Socket failed\n");
+		exit(1);
+	}
+	
+	// addr len
+	addr_len = sizeof(sin);
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	// Close sock
+	close(s);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
