@@ -4,6 +4,13 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/socket.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <signal.h>
 
 #define WIDTH 43
 #define HEIGHT 21
@@ -185,15 +192,15 @@ int main(int argc, char *argv[]) {
 	// refresh is clock rate in microseconds
 	// This corresponds to the movement speed of the ball
 	int refresh;
-	int port;
+	int PORT;
 	bool isHost;
-	char *host;
+	char *HOST;
 	char *difficulty;;
 	if(argc >= 3 && argc <= 4) {
 		if (strcmp(argv[1],"--host")==0) {
 			isHost=true;
-			port=atoi(argv[2]);
-			host = "None";
+			PORT=atoi(argv[2]);
+			HOST = "None";
 			difficulty=argv[3];
 			if(strcmp(difficulty, "easy") == 0) refresh = 80000;
 			else if(strcmp(difficulty, "medium") == 0) refresh = 40000;
@@ -204,8 +211,8 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		else {
-			host=argv[1];
-			port=atoi(argv[2]);
+			HOST=argv[1];
+			PORT=atoi(argv[2]);
 		}
 	}
 	else {
@@ -213,15 +220,15 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	
-	info var = {port, host};
+	info var = {PORT, HOST};
 	
 	if (isHost) {
-		pthread_t host;
-		pthread_create(&host, NULL, host, (void *)&var);
+		pthread_t host_thread;
+		pthread_create(&host_thread, NULL, host, (void *)&var);
 	}
 	else {
-		pthread_t client;
-		pthread_create(&client, NULL, client, (void *)&var);
+		pthread_t client_thread;
+		pthread_create(&client_thread, NULL, client, (void *)&var);
 	}
 	
 	// Set up ncurses environment
@@ -329,7 +336,7 @@ void *client(void *args) {
 	bzero((char*)&sin, sizeof(sin));
 	sin.sin_family = AF_INET;
 	bcopy(hp->h_addr, (char *)&sin.sin_addr, hp->h_length);
-	sin.sin_port = htons(SERVER_PORT);
+	sin.sin_port = htons(PORT);
 	
 	// Open the socket
 	if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
