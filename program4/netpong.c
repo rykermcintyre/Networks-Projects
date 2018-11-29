@@ -40,6 +40,11 @@ typedef struct {
 	char *host;
 } info;
 
+typedef struct {
+	int s;
+	struct sockaddr_in sin;
+} sock_sin;
+
 /* Draw the current game state to the screen
  * ballX: X position of the ball
  * ballY: Y position of the ball
@@ -156,16 +161,25 @@ void tock() {
 /* Listen to keyboard input
  * Updates global pad positions
  */
-void *listenInput(void *args) {
+void *listenInputHost(void *args) {
+	while(1) {
+		switch(getch()) {
+			case KEY_UP: padLY--;
+			 break;
+			case KEY_DOWN: padLY++;
+			 break;
+			default: break;
+	}
+
+	}
+	return NULL;
+}
+void *listenInputClient(void *args) {
 	while(1) {
 		switch(getch()) {
 			case KEY_UP: padRY--;
 			 break;
 			case KEY_DOWN: padRY++;
-			 break;
-			case 'w': padLY--;
-			 break;
-			case 's': padLY++;
 			 break;
 			default: break;
 	}
@@ -240,7 +254,12 @@ int main(int argc, char *argv[]) {
 
 	// Listen to keyboard input in a background thread
 	pthread_t pth;
-	pthread_create(&pth, NULL, listenInput, NULL);
+	if (isHost) {
+		pthread_create(&pth, NULL, listenInputHost, NULL);
+	}
+	else {
+		pthread_create(&pth, NULL, listenInputClient, NULL);
+	}
 
 	// Main game loop executes tock() method every REFRESH microseconds
 	struct timeval tv;
@@ -264,6 +283,43 @@ int main(int argc, char *argv[]) {
 }
 
 
+
+
+
+
+
+
+void *send_state_host(void *args) {
+	struct sockaddr_in client_addr = ((sock_sin *)&args)->sin;
+	int s = ((sock_sin *)&args)->s;
+	int addr_len = sizeof(client_addr);
+	while (1) {
+		char pos[4096];
+		memset(pos, 0, sizeof(pos));
+		sprintf(pos, "%d", padLY);
+		if (sendto(s, pos, strlen(pos), 0, (struct sockaddr *)&client_addr, sizeof(struct sockaddr)) < 0) {
+			fprintf(stderr, "Could not send host paddle pos\n");
+			exit(1);
+		}
+		usleep(1000);
+	}
+}
+
+void *recv_state_host(void *args) {
+	struct sockaddr_in client_addr = ((sock_sin *)&args)->sin;
+	int s = ((sock_sin *)&args)->s;
+	int addr_len = sizeof(client_addr);
+	while (1) {
+		char pos[4096];
+		memset(pos, 0, sizeof(pos));
+		int sz;
+		if ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len)) < 0) {
+			fprintf(stderr, "Unable to recv client paddle pos\n");
+			exit(1);
+		}
+		padRY = atoi(pos);
+	}
+}
 
 // Host code
 void *host(void *args) {
@@ -297,12 +353,26 @@ void *host(void *args) {
 	// Determine addr len
 	addr_len = sizeof(client_addr);
 	
+	// Set up threads to send and receive stats constantly
+	sock_sin q = {s, client_addr};
+	
+	pthread_t send_state;
+	pthread_create(&send_state, NULL, send_state_host, (void *)&q);
+	
+	pthread_t recv_state;
+	pthread_create(&recv_state, NULL, recv_state_host, (void *)&q);
+	
+	
+	
+	
+	
+	/*
 	recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, (socklen_t *)&addr_len);
 	
 	FILE *fp;
 	fp = fopen("log.txt", "a");
 	fwrite(buf, sizeof(buf), 1, fp);
-	
+	*/
 	
 	
 	
@@ -311,8 +381,37 @@ void *host(void *args) {
 	close(s);
 }
 
+void *send_state_client(void *args) {
+	struct sockaddr_in sin = ((sock_sin *)&args)->sin;
+	int s = ((sock_sin *)&args)->s;
+	int addr_len = sizeof(sin);
+	while (1) {
+		char pos[4096];
+		memset(pos, 0, sizeof(pos));
+		sprintf(pos, "%d", padRY);
+		if (sendto(s, pos, strlen(pos), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr)) < 0) {
+			fprintf(stderr, "Could not send client paddle pos\n");
+			exit(1);
+		}
+		usleep(1000);
+	}
+}
 
-
+void *recv_state_client(void *args) {
+	struct sockaddr_in sin = ((sock_sin *)&args)->sin;
+	int s = ((sock_sin *)&args)->s;
+	int addr_len = sizeof(sin);
+	while (1) {
+		char pos[4096];
+		memset(pos, 0, sizeof(pos));
+		int sz;
+		if ((sz = recvfrom(s, pos, sizeof(pos), 0, (struct sockaddr *)&sin, (socklen_t *)&addr_len)) < 0) {
+			fprintf(stderr, "Unable to recv host paddle pos\n");
+			exit(1);
+		}
+		padLY = atoi(pos);
+	}
+}
 
 // Client code
 void *client(void *args) {
@@ -347,9 +446,18 @@ void *client(void *args) {
 	// addr len
 	addr_len = sizeof(sin);
 	
-	char buf[4096] = "Hello";
-	sendto(s, buf, strlen(buf), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr));
+	// Set up threads to send and receive stats constantly
+	sock_sin q = {s, sin};
 	
+	pthread_t send_state;
+	pthread_create(&send_state, NULL, send_state_client, (void *)&q);
+	
+	pthread_t recv_state;
+	pthread_create(&recv_state, NULL, recv_state_client, (void *)&q);
+	/*
+	char buf[4096] = "Hello\0";
+	sendto(s, buf, strlen(buf), 0, (struct sockaddr *)&sin, sizeof(struct sockaddr));
+	*/
 	
 	
 	
