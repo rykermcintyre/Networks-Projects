@@ -176,10 +176,12 @@ int main(int argc, char *argv[]) {
 	// This corresponds to the movement speed of the ball
 	int refresh;
 	int port;
+	bool isHost;
 	char *host;
 	char *difficulty;;
 	if(argc >= 3 && argc <= 4) {
 		if (strcmp(argv[1],"--host")==0) {
+			isHost=true;
 			port=atoi(argv[2]);
 			difficulty=argv[3];
 			if(strcmp(difficulty, "easy") == 0) refresh = 80000;
